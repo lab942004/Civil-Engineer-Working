@@ -3,6 +3,17 @@
     "target": "ES2022",
     "module": "Node16",
     "lib": ["ES2022"],
+    "types": [
+      "node",
+      "express",
+      "cors",
+      "morgan",
+      "jsonwebtoken",
+      "multer",
+      "nodemailer",
+      "bcryptjs",
+      "cookie-parser"
+    ],
     "outDir": "./dist",
     "rootDir": "./src",
     "strict": true,
