@@ -1,0 +1,44 @@
+# Node modules
+node_modules/
+backend/node_modules/
+frontend/node_modules/
+
+# Environment files
+.env
+backend/.env
+frontend/.env
+
+# Build outputs
+dist/
+backend/dist/
+frontend/dist/
+build/
+
+# Prisma
+database/prisma/migrations/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# IDE/Editor
+.vscode/
+.idea/
+*.sublime-workspace
+
+# Misc
+*.tsbuildinfo
+next-env.d.ts
+
+# Coverage reports
+coverage/
+
+# Uploads (if any)
+uploads/
