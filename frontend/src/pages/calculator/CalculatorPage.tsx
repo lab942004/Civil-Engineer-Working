@@ -91,6 +91,12 @@ export default function CalculatorPage() {
 
   const { data: categoriesResponse } = useList<any>('/calculators/categories', ['calculator-categories']);
 
+  useEffect(() => {
+    setSelectedCalc(calculatorType || '');
+    setResult(null);
+    setInputs({});
+  }, [calculatorType]);
+
   const calculator = selectedCalc ? calculatorMetadata[selectedCalc] : null;
   const calculateFn = selectedCalc ? calculatorFunctions[selectedCalc] : null;
 
