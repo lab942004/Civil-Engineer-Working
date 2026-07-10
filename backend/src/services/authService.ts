@@ -39,8 +39,8 @@ export class AuthService {
       select: { id: true, name: true, email: true, role: true, isVerified: true, createdAt: true },
     });
 
-    // Best-effort send: registration should not fail just because the
-    // email provider hiccupped. The user can always hit "resend code".
+    // Best-effort send in registration flow, but log the failure clearly so
+    // SMTP/Brevo issues are visible during debugging.
     try {
       await emailService.sendOtpEmail(user.email, user.name, otp, config.otp.expiryMinutes);
     } catch (err: any) {
@@ -120,7 +120,12 @@ export class AuthService {
       data: { otpCodeHash, otpExpiresAt, otpAttempts: 0, otpLastSentAt: new Date() },
     });
 
-    await emailService.sendOtpEmail(user.email, user.name, otp, config.otp.expiryMinutes);
+    try {
+      await emailService.sendOtpEmail(user.email, user.name, otp, config.otp.expiryMinutes);
+    } catch (err: any) {
+      console.error(`[auth] Failed to resend OTP email to ${user.email}: ${err.message}`);
+      throw new AppError('We could not send the verification code right now. Please try again later.', 502);
+    }
   }
 
   async login(email: string, password: string) {

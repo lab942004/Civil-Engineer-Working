@@ -1,6 +1,10 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+const smtpHost = process.env.SMTP_HOST || 'smtp-relay.brevo.com';
+const smtpPort = process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT) : smtpHost.includes('brevo') ? 465 : 587;
+const smtpSecure = process.env.SMTP_SECURE ? process.env.SMTP_SECURE === 'true' : smtpHost.includes('brevo');
+
 export const config = {
   port: parseInt(process.env.PORT || '5000'),
   nodeEnv: process.env.NODE_ENV || 'development',
@@ -42,12 +46,12 @@ export const config = {
     path: process.env.UPLOAD_PATH || './uploads',
   },
   smtp: {
-    host: process.env.SMTP_HOST || 'smtp.gmail.com',
-    port: parseInt(process.env.SMTP_PORT || '587'),
-    secure: process.env.SMTP_SECURE === 'true', // true for port 465, false for 587/25
+    host: smtpHost,
+    port: smtpPort,
+    secure: smtpSecure, // true for 465, false for 587/25
     user: process.env.SMTP_USER || '',
     pass: process.env.SMTP_PASS || '',
-    from: process.env.EMAIL_FROM || 'noreply@civilengineer.com',
+    from: process.env.EMAIL_FROM || process.env.SMTP_USER || 'noreply@yourdomain.com',
     fromName: process.env.EMAIL_FROM_NAME || 'Civil Engineer Assistant',
   },
   resend: {
