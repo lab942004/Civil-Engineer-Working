@@ -155,7 +155,7 @@ export default function EstimationPage() {
         try { localStorage.setItem(`estimation_items_${editingId}`, JSON.stringify(items)); } catch {}
       } else {
         const created = await createMutation.mutateAsync(data);
-        const newId = created?.id ?? created?.data?.id ?? estimationName;
+        const newId = created?.data?.id ?? estimationName;
         try { localStorage.setItem(`estimation_items_${newId}`, JSON.stringify(items)); } catch {}
         setEditingId(newId ?? null);
       }
