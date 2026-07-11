@@ -147,11 +147,17 @@ export default function EstimationPage() {
           amount,
           items: items.filter((i) => i.category === category).map((i) => ({ name: i.name, cost: i.quantity * i.rate })),
         })),
+        // NOTE: do not send top-level `items` field - backend Estimation model doesn't have it
       };
       if (editingId) {
         await updateMutation.mutateAsync({ id: editingId, data });
+        // persist detailed items locally keyed by id
+        try { localStorage.setItem(`estimation_items_${editingId}`, JSON.stringify(items)); } catch {}
       } else {
-        await createMutation.mutateAsync(data);
+        const created = await createMutation.mutateAsync(data);
+        const newId = created?.id ?? created?.data?.id ?? estimationName;
+        try { localStorage.setItem(`estimation_items_${newId}`, JSON.stringify(items)); } catch {}
+        setEditingId(newId ?? null);
       }
       refetch();
     } catch {}
@@ -162,6 +168,39 @@ export default function EstimationPage() {
     setArea(est.area);
     setEditingId(est.id);
     setEstimationName(est.title);
+    // Restore detailed items if available from backend `est.items` or from localStorage fallback
+    const fromBackendItems = (est as any).items;
+    if (Array.isArray(fromBackendItems) && fromBackendItems.length > 0) {
+      // try to use backend-provided items directly (may include quantity/rate/unit/category)
+      setItems(fromBackendItems.map((it: any) => ({
+        id: it.id ?? crypto.randomUUID?.() ?? Math.random().toString(36).slice(2),
+        name: it.name ?? it.itemName ?? '',
+        unit: it.unit ?? it.uom ?? 'nos',
+        quantity: typeof it.quantity === 'number' ? it.quantity : (it.qty ?? 1),
+        rate: typeof it.rate === 'number' ? it.rate : (it.cost ?? 0),
+        category: it.category ?? 'Other',
+      })));
+    } else {
+      try {
+        const stored = localStorage.getItem(`estimation_items_${est.id}`);
+        if (stored) {
+          setItems(JSON.parse(stored));
+        } else {
+          // fallback to presets for the building type
+          const preset = PRESET_ITEMS[est.buildingType] || PRESET_ITEMS.RESIDENTIAL;
+          setItems(preset.map((item) => ({
+            ...item,
+            id: crypto.randomUUID?.() ?? Math.random().toString(36).slice(2),
+          })));
+        }
+      } catch {
+        const preset = PRESET_ITEMS[est.buildingType] || PRESET_ITEMS.RESIDENTIAL;
+        setItems(preset.map((item) => ({
+          ...item,
+          id: crypto.randomUUID?.() ?? Math.random().toString(36).slice(2),
+        })));
+      }
+    }
     setShowSaved(false);
   };
 
@@ -192,7 +231,8 @@ export default function EstimationPage() {
     lines.push(`Floor Factor: ${floorFactor.toFixed(2)}`);
     lines.push(`Area Multiplier: ${areaMultiplier.toFixed(2)}`);
     lines.push(`Grand Total: ${formatCurrency(totalCost)}`);
-    lines.push(`Cost per sq.ft: ${formatCurrency(totalCost / (area * floors))}`);
+    const areaFloors = (area * floors) || 1;
+    lines.push(`Cost per sq.ft: ${formatCurrency(totalCost / areaFloors)}`);
 
     const blob = new Blob(['\uFEFF' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);

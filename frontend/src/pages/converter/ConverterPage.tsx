@@ -109,33 +109,43 @@ const unitCategories = [
 
 export default function ConverterPage() {
   const [category, setCategory] = useState(unitCategories[0].name);
-  const [fromUnit, setFromUnit] = useState('');
-  const [toUnit, setToUnit] = useState('');
-  const [value, setValue] = useState('');
+  const [fromUnit, setFromUnit] = useState(unitCategories[0].units[0].name);
+  const [toUnit, setToUnit] = useState(unitCategories[0].units[1].name);
+  const [value, setValue] = useState('1');
   const [result, setResult] = useState('');
 
   const currentCategory = unitCategories.find((c) => c.name === category);
   const units = currentCategory?.units || [];
 
-  const convert = () => {
-    if (!fromUnit || !toUnit || !value) return;
+  const convert = (inputValue = value) => {
+    const trimmed = inputValue.trim();
+    if (!fromUnit || !toUnit || !trimmed) {
+      setResult('');
+      return;
+    }
+
     const from = units.find((u) => u.name === fromUnit);
     const to = units.find((u) => u.name === toUnit);
-    if (!from || !to) return;
+    if (!from || !to) {
+      setResult('');
+      return;
+    }
 
-    const numValue = parseFloat(value);
-    if (isNaN(numValue)) return;
+    const numValue = Number(trimmed);
+    if (Number.isNaN(numValue)) {
+      setResult('');
+      return;
+    }
 
-    // Handle temperature specially
     if (category === 'Temperature') {
       let celsius: number;
       if (fromUnit === 'Celsius') celsius = numValue;
-      else if (fromUnit === 'Fahrenheit') celsius = (numValue - 32) * 5 / 9;
+      else if (fromUnit === 'Fahrenheit') celsius = ((numValue - 32) * 5) / 9;
       else celsius = numValue - 273.15;
 
       let converted: number;
       if (toUnit === 'Celsius') converted = celsius;
-      else if (toUnit === 'Fahrenheit') converted = (celsius * 9 / 5) + 32;
+      else if (toUnit === 'Fahrenheit') converted = (celsius * 9) / 5 + 32;
       else converted = celsius + 273.15;
 
       setResult(converted.toFixed(4));
@@ -163,8 +173,17 @@ export default function ConverterPage() {
       setFromUnit(cat.units[0].name);
       setToUnit(cat.units[1].name);
     }
-    setValue('');
+    setValue('1');
     setResult('');
+  };
+
+  const handleValueChange = (nextValue: string) => {
+    setValue(nextValue);
+    if (nextValue.trim()) {
+      convert(nextValue);
+    } else {
+      setResult('');
+    }
   };
 
   return (
@@ -210,14 +229,14 @@ export default function ConverterPage() {
                   type="number"
                   placeholder="Enter value"
                   value={value}
-                  onChange={(e) => setValue(e.target.value)}
+                  onChange={(e) => handleValueChange(e.target.value)}
                 />
               </div>
               <Button onClick={swap} variant="outline" className="mt-6">
                 <RotateCcw size={16} />
               </Button>
             </div>
-            <Button onClick={convert} className="w-full">
+            <Button onClick={() => convert(value)} className="w-full">
               <ArrowLeftRight className="mr-2" size={16} />
               Convert
             </Button>

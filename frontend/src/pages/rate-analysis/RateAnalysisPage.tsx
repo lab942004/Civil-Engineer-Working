@@ -212,7 +212,7 @@ export default function RateAnalysisPage() {
 
   const filteredTemplates = templates.filter((t) =>
     t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    t.description.toLowerCase().includes(searchQuery.toLowerCase())
+    (t.description || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
