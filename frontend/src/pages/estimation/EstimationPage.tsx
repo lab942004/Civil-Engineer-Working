@@ -76,6 +76,12 @@ const PRESET_ITEMS: Record<string, EstimationItem[]> = {
 export default function EstimationPage() {
   const [type, setType] = useState('RESIDENTIAL');
   const [area, setArea] = useState(1000);
+  // BUG FIX: the Area input was bound straight to the numeric `area` state.
+  // Clearing the field ran `parseFloat('') || 0`, which wrote 0 right back
+  // into state, so the controlled input snapped back to "0" and could never
+  // actually be left empty while typing a new number. `areaText` holds the
+  // literal typed string; `area` (used in every calculation) stays numeric.
+  const [areaText, setAreaText] = useState('1000');
   const [floors, setFloors] = useState(1);
   const [items, setItems] = useState<EstimationItem[]>([]);
   const [showItems, setShowItems] = useState(false);
@@ -94,18 +100,43 @@ export default function EstimationPage() {
   const currentType = BUILDING_TYPES.find((t) => t.value === type)!;
   const costPerSqft = (currentType.minRate + currentType.maxRate) / 2;
 
+  // BUG FIX: this used to be `useEffect(() => { setItems(preset...); setEstimationName(...) }, [type])`
+  // plus a second `useEffect(..., [area, type])` that also reset `estimationName`.
+  // Both fired on ANY change to `type`/`area` — including the ones
+  // `loadSavedEstimation` makes when restoring a saved estimation. Because
+  // effects run after the state update commits (not in call order inside
+  // the function that triggered them), the freshly-restored `items` and
+  // `estimationName` from `loadSavedEstimation` were immediately stomped by
+  // these effects re-running and overwriting them with the generic preset —
+  // which is exactly why an updated/loaded estimation always showed the
+  // original preset numbers instead of what was actually saved. Seeding now
+  // happens once on mount, and building-type changes go through the
+  // explicit `handleSelectType` below, which only fires from the manual
+  // type-picker buttons — never as a side effect of loading a saved record.
   useEffect(() => {
-    const preset = PRESET_ITEMS[type] || PRESET_ITEMS.RESIDENTIAL;
+    const preset = PRESET_ITEMS.RESIDENTIAL;
     setItems(preset.map((item) => ({
       ...item,
       id: crypto.randomUUID?.() ?? Math.random().toString(36).slice(2),
     })));
-    setEstimationName(`${currentType.label} Building - ${area} sq.ft`);
-  }, [type]);
+    setEstimationName(`${BUILDING_TYPES[0].label} Building - ${area} sq.ft`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  useEffect(() => {
-    setEstimationName(`${currentType.label} Building - ${area} sq.ft`);
-  }, [area, type]);
+  const handleSelectType = (newType: string) => {
+    const bt = BUILDING_TYPES.find((t) => t.value === newType)!;
+    const preset = PRESET_ITEMS[newType] || PRESET_ITEMS.RESIDENTIAL;
+    setType(newType);
+    // Manually picking a type starts a fresh, unsaved estimation — clearing
+    // editingId prevents accidentally overwriting a previously loaded
+    // estimation with a completely different building type's presets.
+    setEditingId(null);
+    setItems(preset.map((item) => ({
+      ...item,
+      id: crypto.randomUUID?.() ?? Math.random().toString(36).slice(2),
+    })));
+    setEstimationName(`${bt.label} Building - ${area} sq.ft`);
+  };
 
   const totalBaseCost = items.reduce((sum, item) => sum + item.quantity * item.rate, 0);
   const floorFactor = 1 + (floors - 1) * 0.15;
@@ -145,7 +176,18 @@ export default function EstimationPage() {
           category,
           percentage: totalBaseCost > 0 ? (amount / totalBaseCost) * 100 : 0,
           amount,
-          items: items.filter((i) => i.category === category).map((i) => ({ name: i.name, cost: i.quantity * i.rate })),
+          // BUG FIX: previously only `name` and `cost` were saved here, so
+          // loading a saved estimation back could never reconstruct the
+          // actual quantity/rate/unit the user entered — it silently fell
+          // back to the building type's preset items instead. Now the full
+          // line item is stored so a load is a faithful restore.
+          items: items.filter((i) => i.category === category).map((i) => ({
+            name: i.name,
+            cost: i.quantity * i.rate,
+            quantity: i.quantity,
+            rate: i.rate,
+            unit: i.unit,
+          })),
         })),
         // NOTE: do not send top-level `items` field - backend Estimation model doesn't have it
       };
@@ -166,12 +208,28 @@ export default function EstimationPage() {
   const loadSavedEstimation = (est: Estimation) => {
     setType(est.buildingType);
     setArea(est.area);
+    setAreaText(String(est.area));
     setEditingId(est.id);
     setEstimationName(est.title);
-    // Restore detailed items if available from backend `est.items` or from localStorage fallback
-    const fromBackendItems = (est as any).items;
-    if (Array.isArray(fromBackendItems) && fromBackendItems.length > 0) {
-      // try to use backend-provided items directly (may include quantity/rate/unit/category)
+    // Restore detailed items. BUG FIX: this used to look for `est.items`,
+    // a field that doesn't exist on the Estimation model — the backend
+    // returns the nested relation as `est.breakdown` (one row per category,
+    // each holding its own `items` array), so the backend-restore branch
+    // below never ran and every load silently fell back to localStorage or,
+    // failing that, the building type's generic presets (losing whatever
+    // the user had actually entered). Now we flatten `breakdown[].items`
+    // back into the flat item list the form works with, using the
+    // quantity/rate/unit saved alongside each item where available.
+    const breakdown = (est as any).breakdown;
+    const fromBackendItems = Array.isArray(breakdown)
+      ? breakdown.flatMap((b: any) =>
+          (Array.isArray(b.items) ? b.items : []).map((it: any) => ({ ...it, category: b.category }))
+        )
+      : [];
+    if (fromBackendItems.length > 0) {
+      // Use backend-provided items directly (quantity/rate/unit/category).
+      // Older saves only have name+cost; treat those as a single-quantity
+      // line item at that cost rather than silently dropping them.
       setItems(fromBackendItems.map((it: any) => ({
         id: it.id ?? crypto.randomUUID?.() ?? Math.random().toString(36).slice(2),
         name: it.name ?? it.itemName ?? '',
@@ -317,7 +375,7 @@ export default function EstimationPage() {
                 {BUILDING_TYPES.map((bt) => {
                   const Icon = bt.icon;
                   return (
-                    <button key={bt.value} onClick={() => setType(bt.value)}
+                    <button key={bt.value} onClick={() => handleSelectType(bt.value)}
                       className={`p-3 rounded-xl border-2 text-center transition-all ${
                         type === bt.value ? 'border-primary bg-primary/5 shadow-sm' : 'border-[hsl(var(--border))] hover:border-primary/30'
                       }`}>
@@ -338,10 +396,23 @@ export default function EstimationPage() {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="text-xs font-medium text-[hsl(var(--muted-foreground))] mb-1.5 block">Built-up Area (sq.ft)</label>
-                  <Input type="number" value={area} onChange={(e) => setArea(parseFloat(e.target.value) || 0)} />
+                  <Input type="number" value={areaText} onChange={(e) => {
+                    const raw = e.target.value;
+                    setAreaText(raw);
+                    const parsed = parseFloat(raw) || 0;
+                    setArea(parsed);
+                    // Only auto-refresh the generated name for a brand new,
+                    // unsaved estimation — never while editing a loaded one,
+                    // or every area keystroke would blow away its real title.
+                    if (!editingId) setEstimationName(`${currentType.label} Building - ${parsed} sq.ft`);
+                  }} />
                   <div className="flex gap-1 mt-1">
                     {[500, 1000, 2000, 5000].map((v) => (
-                      <button key={v} onClick={() => setArea(v)}
+                      <button key={v} onClick={() => {
+                        setArea(v);
+                        setAreaText(String(v));
+                        if (!editingId) setEstimationName(`${currentType.label} Building - ${v} sq.ft`);
+                      }}
                         className="text-[10px] px-2 py-0.5 rounded bg-[hsl(var(--secondary))] hover:bg-primary/10 transition-colors">{v}</button>
                     ))}
                   </div>

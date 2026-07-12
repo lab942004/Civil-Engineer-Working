@@ -184,7 +184,9 @@ export interface EstimationBreakdown {
   category: string;
   percentage: number;
   amount: number;
-  items: { name: string; cost: number }[];
+  // quantity/rate/unit are optional because older saved estimations were
+  // written before this fix and only ever stored name+cost per item.
+  items: { name: string; cost: number; quantity?: number; rate?: number; unit?: string }[];
 }
 
 // Inspection Types

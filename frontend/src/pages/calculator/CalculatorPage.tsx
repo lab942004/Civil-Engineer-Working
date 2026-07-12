@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import toast from 'react-hot-toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -85,6 +86,14 @@ const categories = [
 export default function CalculatorPage() {
   const { calculatorType } = useParams();
   const [inputs, setInputs] = useState<CalcInput>({});
+  // BUG FIX: text fields need their own string representation. Before, the
+  // input's `value` was bound straight to the numeric `inputs` state, and
+  // clearing the field ran `parseFloat('') || 0` which immediately wrote a
+  // 0 back into state -> the controlled input snapped straight back to "0"
+  // and the field could never actually be emptied to type a new value.
+  // `rawInputs` holds exactly what's typed (including ''), so the field can
+  // sit empty while the numeric `inputs` used for calculation defaults to 0.
+  const [rawInputs, setRawInputs] = useState<Record<string, string>>({});
   const [result, setResult] = useState<CalculationResult | null>(null);
   const [selectedCalc, setSelectedCalc] = useState(calculatorType || '');
   const [showHistory, setShowHistory] = useState(false);
@@ -127,15 +136,23 @@ export default function CalculatorPage() {
   useEffect(() => {
     if (calculator) {
       const defaults: CalcInput = {};
+      const rawDefaults: Record<string, string> = {};
       calculator.inputs.forEach((input) => {
-        if (input.defaultValue !== undefined) defaults[input.name] = input.defaultValue;
+        if (input.defaultValue !== undefined) {
+          defaults[input.name] = input.defaultValue;
+          rawDefaults[input.name] = String(input.defaultValue);
+        }
       });
       setInputs(defaults);
+      setRawInputs(rawDefaults);
       setResult(null);
     }
   }, [selectedCalc]);
 
   const handleInputChange = (name: string, value: string) => {
+    // Keep the exact typed string (so the field can be empty) alongside a
+    // parsed numeric value (so Calculate always has a real number to use).
+    setRawInputs((prev) => ({ ...prev, [name]: value }));
     setInputs((prev) => ({ ...prev, [name]: value === '' ? 0 : parseFloat(value) || 0 }));
   };
 
@@ -155,12 +172,71 @@ export default function CalculatorPage() {
   const handleReset = () => {
     if (calculator) {
       const defaults: CalcInput = {};
+      const rawDefaults: Record<string, string> = {};
       calculator.inputs.forEach((input) => {
-        if (input.defaultValue !== undefined) defaults[input.name] = input.defaultValue;
+        if (input.defaultValue !== undefined) {
+          defaults[input.name] = input.defaultValue;
+          rawDefaults[input.name] = String(input.defaultValue);
+        }
       });
       setInputs(defaults);
+      setRawInputs(rawDefaults);
     }
     setResult(null);
+  };
+
+  // Print: build a clean, standalone printable page (title, inputs, result,
+  // steps) instead of calling window.print() on the whole app chrome/sidebar.
+  const handlePrint = () => {
+    if (!result || !calculator) return;
+    const win = window.open('', '_blank', 'width=800,height=900');
+    if (!win) {
+      toast.error('Please allow pop-ups to print');
+      return;
+    }
+    const stepsHtml = result.steps
+      .map((s, i) => `<div style="margin:6px 0;padding:8px;background:#f3f4f6;border-radius:6px;">
+        <strong>${i + 1}.</strong> ${s.description}<br/><span style="font-weight:600;">${s.value}</span></div>`)
+      .join('');
+    const detailsHtml = result.details && Object.keys(result.details).length > 0
+      ? `<h3>Detailed Breakdown</h3><table style="width:100%;border-collapse:collapse;">${Object.entries(result.details)
+          .map(([k, v]) => `<tr><td style="padding:4px;border-bottom:1px solid #e5e7eb;">${k.replace(/([A-Z])/g, ' $1')}</td><td style="padding:4px;border-bottom:1px solid #e5e7eb;text-align:right;">${String(v)}</td></tr>`)
+          .join('')}</table>`
+      : '';
+    win.document.write(`<!DOCTYPE html><html><head><title>${calculator.name} - Result</title>
+      <style>body{font-family:Arial,sans-serif;padding:24px;color:#111827;}h1{font-size:20px;}h3{font-size:14px;margin-top:20px;}</style>
+      </head><body>
+      <h1>${calculator.name}</h1>
+      <p>Formula: ${result.formula}</p>
+      <h2>Result: ${result.result.toFixed(2)} ${result.unit}</h2>
+      <h3>Step-by-Step Solution</h3>
+      ${stepsHtml}
+      ${detailsHtml}
+      <p style="margin-top:24px;font-size:11px;color:#6b7280;">Generated on ${new Date().toLocaleString('en-IN')} — for guidance only, verify with a licensed engineer.</p>
+      </body></html>`);
+    win.document.close();
+    win.focus();
+    win.print();
+  };
+
+  // Share: use the native Web Share API where available (mobile browsers,
+  // most desktop browsers over HTTPS); otherwise fall back to copying a
+  // text summary to the clipboard so the button always does *something*.
+  const handleShare = async () => {
+    if (!result || !calculator) return;
+    const shareText = `${calculator.name}\nResult: ${result.result.toFixed(2)} ${result.unit}\nFormula: ${result.formula}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: calculator.name, text: shareText });
+      } else if (navigator.clipboard) {
+        await navigator.clipboard.writeText(shareText);
+        toast.success('Result copied to clipboard');
+      } else {
+        toast.error('Sharing is not supported on this browser');
+      }
+    } catch {
+      // user cancelled the share sheet — not an error
+    }
   };
 
   const handleSave = async () => {
@@ -211,7 +287,7 @@ export default function CalculatorPage() {
                   label={`${input.label}${input.unit ? ` (${input.unit})` : ''}`}
                   type="number"
                   placeholder={`Enter ${input.label.toLowerCase()}`}
-                  value={inputs[input.name] ?? ''}
+                  value={rawInputs[input.name] ?? ''}
                   onChange={(e) => handleInputChange(input.name, e.target.value)}
                 />
               ))}
@@ -293,10 +369,10 @@ export default function CalculatorPage() {
                     <Button variant="outline" size="sm" onClick={() => setShowHistory((v) => !v)}>
                       <History size={14} className="mr-1" /> History
                     </Button>
-                    <Button variant="outline" size="sm">
+                    <Button variant="outline" size="sm" onClick={handlePrint}>
                       <Printer size={14} className="mr-1" /> Print
                     </Button>
-                    <Button variant="outline" size="sm">
+                    <Button variant="outline" size="sm" onClick={handleShare}>
                       <Share2 size={14} className="mr-1" /> Share
                     </Button>
                   </div>
@@ -349,7 +425,12 @@ export default function CalculatorPage() {
                         variant="ghost"
                         size="sm"
                         onClick={() => {
-                          if (saved.input) setInputs(saved.input);
+                          if (saved.input) {
+                            setInputs(saved.input);
+                            const raw: Record<string, string> = {};
+                            Object.entries(saved.input as CalcInput).forEach(([k, v]) => { raw[k] = String(v); });
+                            setRawInputs(raw);
+                          }
                           if (saved.result) setResult(saved.result);
                         }}
                       >

@@ -272,7 +272,7 @@ export default function DashboardPage() {
                 ) : (
                   <p className="text-xs text-[hsl(var(--muted-foreground))] py-2">
                     No IS codes viewed yet.{' '}
-                    <Link to="/is-codes" className="text-[hsl(221.2,83.2%,53.3%)] hover:underline">
+                    <Link to="/iscodes" className="text-[hsl(221.2,83.2%,53.3%)] hover:underline">
                       Browse the library
                     </Link>
                   </p>
