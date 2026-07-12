@@ -1,37 +1,46 @@
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
-import { useEffect } from 'react';
+import { useEffect, lazy, Suspense } from 'react';
+import { Loader2 } from 'lucide-react';
 import { useThemeStore } from '@/store/themeStore';
 import { useAuthStore } from '@/store/authStore';
 import AppLayout from '@/components/layout/AppLayout';
 
 // Pages
-import LoginPage from '@/pages/auth/LoginPage';
-import RegisterPage from '@/pages/auth/RegisterPage';
-import VerifyEmailPage from '@/pages/auth/VerifyEmailPage';
-import ForgotPasswordPage from '@/pages/auth/ForgotPasswordPage';
-import ResetPasswordPage from '@/pages/auth/ResetPasswordPage';
-import DashboardPage from '@/pages/dashboard/DashboardPage';
-import CalculatorPage from '@/pages/calculator/CalculatorPage';
-import ConverterPage from '@/pages/converter/ConverterPage';
-import MaterialsPage from '@/pages/materials/MaterialsPage';
-import ISCodesPage from '@/pages/iscodes/ISCodesPage';
-import BOQPage from '@/pages/boq/BOQPage';
-import RateAnalysisPage from '@/pages/rate-analysis/RateAnalysisPage';
-import EstimationPage from '@/pages/estimation/EstimationPage';
-import DrawingsPage from '@/pages/drawings/DrawingsPage';
-import ProjectsPage from '@/pages/projects/ProjectsPage';
-import InspectionPage from '@/pages/inspection/InspectionPage';
-import SiteDiaryPage from '@/pages/sitediary/SiteDiaryPage';
-import ReportsPage from '@/pages/reports/ReportsPage';
-import NotesPage from '@/pages/notes/NotesPage';
-import LearningPage from '@/pages/learning/LearningPage';
-import ProfilePage from '@/pages/profile/ProfilePage';
-import AdminPage from '@/pages/admin/AdminPage';
-import SettingsPage from '@/pages/SettingsPage';
-import HelpPage from '@/pages/HelpPage';
-import NotFoundPage from '@/pages/NotFoundPage';
+// BUG FIX / BUILD WARNING: every page used to be imported statically here,
+// so Vite had no choice but to bundle all ~25 pages (plus every library
+// only one of them needs, e.g. recharts-style chart code, drawing tools,
+// etc.) into a single ~790 kB JS chunk that shipped on first load no matter
+// which page the user actually opened, triggering Vite's "chunk larger
+// than 500 kB" build warning. Switching to `React.lazy()` lets Vite split
+// each page into its own chunk that only downloads when that route is
+// visited, so first load only pays for the login/dashboard code path.
+const LoginPage = lazy(() => import('@/pages/auth/LoginPage'));
+const RegisterPage = lazy(() => import('@/pages/auth/RegisterPage'));
+const VerifyEmailPage = lazy(() => import('@/pages/auth/VerifyEmailPage'));
+const ForgotPasswordPage = lazy(() => import('@/pages/auth/ForgotPasswordPage'));
+const ResetPasswordPage = lazy(() => import('@/pages/auth/ResetPasswordPage'));
+const DashboardPage = lazy(() => import('@/pages/dashboard/DashboardPage'));
+const CalculatorPage = lazy(() => import('@/pages/calculator/CalculatorPage'));
+const ConverterPage = lazy(() => import('@/pages/converter/ConverterPage'));
+const MaterialsPage = lazy(() => import('@/pages/materials/MaterialsPage'));
+const ISCodesPage = lazy(() => import('@/pages/iscodes/ISCodesPage'));
+const BOQPage = lazy(() => import('@/pages/boq/BOQPage'));
+const RateAnalysisPage = lazy(() => import('@/pages/rate-analysis/RateAnalysisPage'));
+const EstimationPage = lazy(() => import('@/pages/estimation/EstimationPage'));
+const DrawingsPage = lazy(() => import('@/pages/drawings/DrawingsPage'));
+const ProjectsPage = lazy(() => import('@/pages/projects/ProjectsPage'));
+const InspectionPage = lazy(() => import('@/pages/inspection/InspectionPage'));
+const SiteDiaryPage = lazy(() => import('@/pages/sitediary/SiteDiaryPage'));
+const ReportsPage = lazy(() => import('@/pages/reports/ReportsPage'));
+const NotesPage = lazy(() => import('@/pages/notes/NotesPage'));
+const LearningPage = lazy(() => import('@/pages/learning/LearningPage'));
+const ProfilePage = lazy(() => import('@/pages/profile/ProfilePage'));
+const AdminPage = lazy(() => import('@/pages/admin/AdminPage'));
+const SettingsPage = lazy(() => import('@/pages/SettingsPage'));
+const HelpPage = lazy(() => import('@/pages/HelpPage'));
+const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -75,6 +84,13 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <HashRouter>
+        <Suspense
+          fallback={
+            <div className="flex h-screen w-full items-center justify-center">
+              <Loader2 className="h-8 w-8 animate-spin text-[hsl(221.2,83.2%,53.3%)]" />
+            </div>
+          }
+        >
         <Routes>
           {/* Public Routes */}
           <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
@@ -152,6 +168,7 @@ export default function App() {
           {/* 404 */}
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
+        </Suspense>
       </HashRouter>
       <Toaster
         position="top-right"

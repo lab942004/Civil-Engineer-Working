@@ -1,5 +1,6 @@
 import { Response, NextFunction } from 'express';
 import type { AuthenticatedRequest } from '../types';
+import { prisma } from '../lib/prisma';
 
 type ServiceType = {
   list: (params: any) => Promise<any>;
@@ -55,6 +56,48 @@ const ownerFieldByModel: Record<string, string> = {
 
 function ownerField(entityName: string): string {
   return ownerFieldByModel[entityName] || 'userId';
+}
+
+/**
+ * BUG FIX: "Recent Activity" on the dashboard was permanently empty for
+ * every user. GET /activities and /dashboard/stats both read from
+ * `ActivityLog`, but nothing anywhere in the backend ever wrote a row to
+ * that table — there was no create/update/delete hook logging anything, so
+ * the table was always empty and the feed could never show anything but
+ * "No recent activities yet." This adds that missing write path, scoped to
+ * the entities a user would actually recognize as "activity" (skips things
+ * like Settings/Notifications which would just be noise).
+ */
+const ACTIVITY_ENTITIES = new Set([
+  'Project', 'BOQ', 'Estimation', 'Inspection', 'DailyProgress', 'Note', 'SavedCalculation', 'RateAnalysis',
+]);
+
+// Best-effort label for the item so the activity feed reads like
+// "Created project \"Riverside Tower\"" instead of just "Created project".
+function labelFor(item: any): string {
+  const name = item?.title ?? item?.name ?? item?.calculator ?? item?.workDone;
+  return name ? ` "${String(name).slice(0, 60)}"` : '';
+}
+
+async function logActivity(
+  userId: string | undefined,
+  entityName: string,
+  verb: 'Created' | 'Updated' | 'Deleted',
+  item: any,
+) {
+  if (!userId || !ACTIVITY_ENTITIES.has(entityName)) return;
+  try {
+    await prisma.activityLog.create({
+      data: {
+        userId,
+        action: `${verb} ${entityName}${labelFor(item)}`,
+        entity: entityName,
+        entityId: String(item?.id ?? ''),
+      },
+    });
+  } catch {
+    // Logging must never break the actual create/update/delete request.
+  }
 }
 
 // Models with a nested array relation (child rows created inline with the
@@ -137,6 +180,7 @@ export function createCrudController(service: ServiceType, entityName: string, s
         data = applyNestedCreateShape(entityName, data);
 
         const item = await service.create(data);
+        await logActivity(req.user?.id, entityName, 'Created', item);
         res.status(201).json({ success: true, message: `${entityName} created successfully`, data: item });
       } catch (error) { next(error); }
     },
@@ -157,6 +201,7 @@ export function createCrudController(service: ServiceType, entityName: string, s
         const data = applyNestedCreateShape(entityName, body);
 
         const item = await service.update(id, data);
+        await logActivity(req.user?.id, entityName, 'Updated', item);
         res.json({ success: true, message: `${entityName} updated successfully`, data: item });
       } catch (error) { next(error); }
     },
@@ -171,7 +216,8 @@ export function createCrudController(service: ServiceType, entityName: string, s
             return res.status(403).json({ success: false, message: 'Access denied' });
           }
         }
-        await service.delete(id);
+        const deleted = await service.delete(id);
+        await logActivity(req.user?.id, entityName, 'Deleted', deleted);
         res.json({ success: true, message: `${entityName} deleted successfully` });
       } catch (error) { next(error); }
     },
