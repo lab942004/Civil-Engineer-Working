@@ -71,10 +71,6 @@ createCrudRoutes('saved-calculations', modelServices['SavedCalculation'], 'Saved
 createCrudRoutes('rate-analysis', modelServices['RateAnalysis'], 'RateAnalysis', undefined, true);
 createCrudRoutes('settings', modelServices['Settings'], 'Settings', undefined, true);
 
-// Admin routes
-createCrudRoutes('admin/users', modelServices['User'], 'User', ['SUPER_ADMIN', 'ADMIN']);
-createCrudRoutes('admin/roles', modelServices['Role'], 'Role', ['SUPER_ADMIN']);
-
 // Calculator categories
 router.get('/calculators/categories', authenticate, async (req, res, next) => {
   try {
@@ -107,17 +103,6 @@ router.get('/dashboard/stats', authenticate, async (req, res, next) => {
         profileCompletion: 75, announcements: [],
       }
     });
-  } catch (error) { next(error); }
-});
-
-// Admin dashboard stats
-router.get('/admin/dashboard', authenticate, authorize('SUPER_ADMIN', 'ADMIN'), async (req, res, next) => {
-  try {
-    const [users, projects, isCodes, materials, reports] = await Promise.all([
-      prisma.user.count(), prisma.project.count(),
-      prisma.iSCode.count(), prisma.material.count(), prisma.report.count(),
-    ]);
-    res.json({ success: true, data: { users, projects, isCodes, materials, reports } });
   } catch (error) { next(error); }
 });
 

@@ -16,7 +16,7 @@ export class AppError extends Error {
 
 export const errorHandler = (err: any, req: Request, res: Response, next: NextFunction) => {
   let statusCode = err.statusCode || 500;
-  let message = err.isOperational ? err.message : 'Internal Server Error';
+  let message = err.message || 'Internal Server Error';
 
   // Handle Prisma known request errors (e.g., foreign key violations, unique constraint)
   if (err.code && err.code.startsWith('P')) {

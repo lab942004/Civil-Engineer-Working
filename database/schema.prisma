@@ -50,6 +50,10 @@ model User {
   rateAnalyses  RateAnalysis[]
   boqs          BOQ[]
   estimations   Estimation[]
+
+  // Admin relations
+  adminNotificationsCreated AdminNotification[] @relation("AdminNotificationCreator")
+  adminActivityLogs         AdminActivityLog[]
 }
 
 enum UserRole {
@@ -563,4 +567,88 @@ model RateAnalysis {
   profitPercent  Float    @default(10)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+}
+
+// ========== ADMIN EXTENSIONS ==========
+
+// Admin notification broadcasts to users
+model AdminNotification {
+  id          String   @id @default(uuid())
+  title       String
+  message     String
+  type        String   @default("ANNOUNCEMENT") // ANNOUNCEMENT, MAINTENANCE, NEW_MATERIAL, NEW_ISCODE, LEARNING_UPDATE, GENERAL
+  audience    String   @default("ALL") // ALL, SELECTED_USERS, ROLE_BASED
+  recipientIds String[] // User IDs if SELECTED_USERS
+  roleFilter  String?  // Role if ROLE_BASED
+  createdById String
+  createdBy   User     @relation("AdminNotificationCreator", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+}
+
+// Site-wide settings for admin panel
+model SiteSettings {
+  id                String   @id @default(uuid())
+  websiteName       String   @default("Civil Engineer Assistant")
+  logo              String?
+  favicon           String?
+  banner            String?
+  contactEmail      String?
+  contactPhone      String?
+  address           String?
+  smtpHost          String?
+  smtpPort          Int?
+  smtpUser          String?
+  smtpPass          String?
+  smtpSecure        Boolean  @default(true)
+  cloudinaryCloud   String?
+  cloudinaryKey     String?
+  cloudinarySecret  String?
+  jwtSecret         String?
+  jwtExpiresIn      String?
+  maintenanceMode   Boolean  @default(false)
+  maintenanceMessage String?
+  theme             String   @default("light")
+  primaryColor      String   @default("#2563eb")
+  facebookUrl       String?
+  twitterUrl        String?
+  linkedinUrl       String?
+  instagramUrl      String?
+  youtubeUrl        String?
+  updatedAt         DateTime @updatedAt
+  updatedById       String?
+}
+
+// Admin activity log (separate from user activity logs)
+model AdminActivityLog {
+  id        String   @id @default(uuid())
+  adminId   String
+  admin     User     @relation(fields: [adminId], references: [id])
+  action    String
+  entity    String
+  entityId  String?
+  details   String?
+  ipAddress String?
+  createdAt DateTime @default(now())
+}
+
+// Website analytics tracking
+model Analytics {
+  id          String   @id @default(uuid())
+  date        DateTime @default(now())
+  visitors    Int      @default(0)
+  pageViews   Int      @default(0)
+  downloads   Int      @default(0)
+  registrations Int    @default(0)
+  storageUsed BigInt   @default(0)
+  createdAt   DateTime @default(now())
+}
+
+// Daily visitor count
+model VisitorLog {
+  id        String   @id @default(uuid())
+  date      DateTime @default(now())
+  count     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@unique([date])
 }

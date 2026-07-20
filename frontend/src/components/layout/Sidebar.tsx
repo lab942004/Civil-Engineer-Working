@@ -23,7 +23,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Settings,
-  Shield,
   Menu,
   X,
 } from 'lucide-react';
@@ -67,7 +66,6 @@ const sidebarItems: SidebarItem[] = [
   { title: 'Notes', icon: <StickyNote size={20} />, path: '/notes' },
   { title: 'Learning Center', icon: <GraduationCap size={20} />, path: '/learning' },
   { title: 'Profile', icon: <UserCircle size={20} />, path: '/profile' },
-  { title: 'Admin Panel', icon: <Shield size={20} />, path: '/admin', roles: ['SUPER_ADMIN', 'ADMIN'] },
 ];
 
 export default function Sidebar() {

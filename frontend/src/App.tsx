@@ -37,7 +37,6 @@ const ReportsPage = lazy(() => import('@/pages/reports/ReportsPage'));
 const NotesPage = lazy(() => import('@/pages/notes/NotesPage'));
 const LearningPage = lazy(() => import('@/pages/learning/LearningPage'));
 const ProfilePage = lazy(() => import('@/pages/profile/ProfilePage'));
-const AdminPage = lazy(() => import('@/pages/admin/AdminPage'));
 const SettingsPage = lazy(() => import('@/pages/SettingsPage'));
 const HelpPage = lazy(() => import('@/pages/HelpPage'));
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'));
@@ -61,14 +60,6 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 function PublicRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore();
   if (isAuthenticated) return <Navigate to="/dashboard" replace />;
-  return <>{children}</>;
-}
-
-function AdminRoute({ children }: { children: React.ReactNode }) {
-  const { user } = useAuthStore();
-  if (!user || (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN')) {
-    return <Navigate to="/dashboard" replace />;
-  }
   return <>{children}</>;
 }
 
@@ -154,9 +145,6 @@ export default function App() {
             
             {/* Profile */}
             <Route path="profile" element={<ProfilePage />} />
-            
-            {/* Admin */}
-            <Route path="admin" element={<AdminRoute><AdminPage /></AdminRoute>} />
             
             {/* Settings */}
             <Route path="settings" element={<SettingsPage />} />

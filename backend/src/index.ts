@@ -6,6 +6,8 @@ import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
 import { config } from './config';
 import routes from './routes';
+import adminRoutes from './routes/adminRoutes';
+import uploadRoutes from './routes/uploadRoutes';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 
 dotenv.config();
@@ -58,6 +60,8 @@ app.get('/api/v1/health', (req, res) => {
 
 // API Routes
 app.use('/api/v1', routes);
+app.use('/api/v1/admin', adminRoutes);
+app.use('/api/v1', uploadRoutes);
 
 // Error Handling
 app.use(notFoundHandler);
@@ -74,7 +78,7 @@ app.listen(PORT, () => {
   console.log(`  📦 Database:  PostgreSQL via Prisma`);
   console.log(`  🔐 Auth:      JWT + Refresh Tokens`);
   console.log(`  ☁️  Storage:   Cloudinary`);
-  console.log(`  🚀 Version:   1.0.0 (No AI)`);
+  console.log(`  🚀 Version:   1.0.0`);
   console.log(`  📅 Started:   ${new Date().toISOString()}`);
   console.log(`========================================\n`);
 });
