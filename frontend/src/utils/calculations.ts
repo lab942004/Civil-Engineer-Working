@@ -1,4 +1,4 @@
-// Engineering Calculation Formulas (Non-AI, pure mathematical formulas)
+// Engineering Calculation Formulas (pure mathematical formulas)
 // All calculations follow IS Codes and standard engineering formulas
 
 export interface CalcInput {

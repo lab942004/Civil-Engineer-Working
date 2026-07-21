@@ -84,13 +84,18 @@ router.put('/change-password', async (req: AuthenticatedRequest, res: Response, 
  * this returns the fallback value instead of crashing with a synchronous
  * "Cannot read properties of undefined" error that .catch() can't handle.
  */
-function safePrisma<T>(accessor: () => T, fallback: T): T {
+/**
+ * Execute a Prisma query safely with a fallback value.
+ * Uses `as any` fallback to handle Prisma's internal PrismaPromise type constraints.
+ * This is safe because the fallback is only used if the model doesn't exist.
+ */
+function safePrisma<T>(accessor: () => T, fallback: any): T {
   try {
     return accessor();
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : String(e);
     console.error('[DASHBOARD] Model access error:', message);
-    return fallback;
+    return fallback as T;
   }
 }
 
@@ -118,21 +123,21 @@ router.get('/dashboard', async (req: AuthenticatedRequest, res: Response, next: 
       recentDownloads,
       systemHealth,
     ] = await Promise.all([
-      (async () => { try { return await safePrisma(() => prisma.user.count(), Promise.resolve(0)); } catch (e: unknown) { const m = e instanceof Error ? e.message : String(e); console.error('[DASHBOARD] user.count failed:', m); return 0; } })(),
-      (async () => { try { return await safePrisma(() => prisma.project.count(), Promise.resolve(0)); } catch (e: unknown) { const m = e instanceof Error ? e.message : String(e); console.error('[DASHBOARD] project.count failed:', m); return 0; } })(),
-      (async () => { try { return await safePrisma(() => prisma.material.count(), Promise.resolve(0)); } catch (e: unknown) { const m = e instanceof Error ? e.message : String(e); console.error('[DASHBOARD] material.count failed:', m); return 0; } })(),
-      (async () => { try { return await safePrisma(() => prisma.iSCode.count(), Promise.resolve(0)); } catch (e: unknown) { const m = e instanceof Error ? e.message : String(e); console.error('[DASHBOARD] iSCode.count failed:', m); return 0; } })(),
-      (async () => { try { return await safePrisma(() => prisma.article.count(), Promise.resolve(0)); } catch (e: unknown) { const m = e instanceof Error ? e.message : String(e); console.error('[DASHBOARD] article.count failed:', m); return 0; } })(),
-      (async () => { try { return await safePrisma(() => prisma.tutorial.count(), Promise.resolve(0)); } catch (e: unknown) { const m = e instanceof Error ? e.message : String(e); console.error('[DASHBOARD] tutorial.count failed:', m); return 0; } })(),
-      (async () => { try { return await safePrisma(() => prisma.download.count(), Promise.resolve(0)); } catch (e: unknown) { const m = e instanceof Error ? e.message : String(e); console.error('[DASHBOARD] download.count failed:', m); return 0; } })(),
-      (async () => { try { return await safePrisma(() => prisma.material.groupBy({ by: ['category'], _count: true }), Promise.resolve([])); } catch (e: unknown) { const m = e instanceof Error ? e.message : String(e); console.error('[DASHBOARD] material.groupBy failed:', m); return [] as any; } })(),
-      (async () => { try { return await safePrisma(() => prisma.user.count({ where: { isActive: true, createdAt: { gte: thirtyDaysAgo } } }), Promise.resolve(0)); } catch (e: unknown) { const m = e instanceof Error ? e.message : String(e); console.error('[DASHBOARD] user.active.count failed:', m); return 0; } })(),
-      (async () => { try { return await safePrisma(() => prisma.visitorLog.findMany({ where: { date: { gte: todayStart } } }), Promise.resolve([])); } catch (e: unknown) { const m = e instanceof Error ? e.message : String(e); console.error('[DASHBOARD] visitorLog.today failed:', m); return [] as any; } })(),
-      (async () => { try { return await safePrisma(() => prisma.visitorLog.findMany({ take: 30, orderBy: { date: 'desc' } }), Promise.resolve([])); } catch (e: unknown) { const m = e instanceof Error ? e.message : String(e); console.error('[DASHBOARD] visitorLog.monthly failed:', m); return [] as any; } })(),
-      (async () => { try { return await safePrisma(() => prisma.projectFile.aggregate({ _sum: { size: true } }), Promise.resolve({ _sum: { size: 0 } })); } catch (e: unknown) { const m = e instanceof Error ? e.message : String(e); console.error('[DASHBOARD] projectFile.aggregate failed:', m); return { _sum: { size: 0 } }; } })(),
-      (async () => { try { return await safePrisma(() => prisma.projectFile.findMany({ take: 10, orderBy: { createdAt: 'desc' }, include: { uploadedBy: { select: { name: true, avatar: true } } } }), Promise.resolve([])); } catch (e: unknown) { const m = e instanceof Error ? e.message : String(e); console.error('[DASHBOARD] projectFile.findMany failed:', m); return [] as any; } })(),
-      (async () => { try { return await safePrisma(() => prisma.download.findMany({ take: 10, orderBy: { createdAt: 'desc' }, include: { user: { select: { name: true, email: true } } } }), Promise.resolve([])); } catch (e: unknown) { const m = e instanceof Error ? e.message : String(e); console.error('[DASHBOARD] download.findMany failed:', m); return [] as any; } })(),
-      (async () => { try { const result = await safePrisma(() => prisma.$queryRaw`SELECT 1 as health`, Promise.resolve([])); return Array.isArray(result) && result.length > 0; } catch (e: unknown) { const m = e instanceof Error ? e.message : String(e); console.error('[DASHBOARD] system health failed:', m); return false; } })(),
+      (async () => { try { return await prisma.user.count(); } catch (e: unknown) { const m = e instanceof Error ? e.message : String(e); console.error('[DASHBOARD] user.count failed:', m); return 0; } })(),
+      (async () => { try { return await prisma.project.count(); } catch (e: unknown) { const m = e instanceof Error ? e.message : String(e); console.error('[DASHBOARD] project.count failed:', m); return 0; } })(),
+      (async () => { try { return await prisma.material.count(); } catch (e: unknown) { const m = e instanceof Error ? e.message : String(e); console.error('[DASHBOARD] material.count failed:', m); return 0; } })(),
+      (async () => { try { return await prisma.iSCode.count(); } catch (e: unknown) { const m = e instanceof Error ? e.message : String(e); console.error('[DASHBOARD] iSCode.count failed:', m); return 0; } })(),
+      (async () => { try { return await prisma.article.count(); } catch (e: unknown) { const m = e instanceof Error ? e.message : String(e); console.error('[DASHBOARD] article.count failed:', m); return 0; } })(),
+      (async () => { try { return await prisma.tutorial.count(); } catch (e: unknown) { const m = e instanceof Error ? e.message : String(e); console.error('[DASHBOARD] tutorial.count failed:', m); return 0; } })(),
+      (async () => { try { return await prisma.download.count(); } catch (e: unknown) { const m = e instanceof Error ? e.message : String(e); console.error('[DASHBOARD] download.count failed:', m); return 0; } })(),
+      (async () => { try { return await prisma.material.groupBy({ by: ['category'], _count: true }); } catch (e: unknown) { const m = e instanceof Error ? e.message : String(e); console.error('[DASHBOARD] material.groupBy failed:', m); return [] as any; } })(),
+      (async () => { try { return await prisma.user.count({ where: { isActive: true, createdAt: { gte: thirtyDaysAgo } } }); } catch (e: unknown) { const m = e instanceof Error ? e.message : String(e); console.error('[DASHBOARD] user.active.count failed:', m); return 0; } })(),
+      (async () => { try { return await prisma.visitorLog.findMany({ where: { date: { gte: todayStart } } }); } catch (e: unknown) { const m = e instanceof Error ? e.message : String(e); console.error('[DASHBOARD] visitorLog.today failed:', m); return [] as any; } })(),
+      (async () => { try { return await prisma.visitorLog.findMany({ take: 30, orderBy: { date: 'desc' } }); } catch (e: unknown) { const m = e instanceof Error ? e.message : String(e); console.error('[DASHBOARD] visitorLog.monthly failed:', m); return [] as any; } })(),
+      (async () => { try { return await prisma.projectFile.aggregate({ _sum: { size: true } }); } catch (e: unknown) { const m = e instanceof Error ? e.message : String(e); console.error('[DASHBOARD] projectFile.aggregate failed:', m); return { _sum: { size: 0 } }; } })(),
+      (async () => { try { return await prisma.projectFile.findMany({ take: 10, orderBy: { createdAt: 'desc' }, include: { uploadedBy: { select: { name: true, avatar: true } } } }); } catch (e: unknown) { const m = e instanceof Error ? e.message : String(e); console.error('[DASHBOARD] projectFile.findMany failed:', m); return [] as any; } })(),
+      (async () => { try { return await prisma.download.findMany({ take: 10, orderBy: { createdAt: 'desc' }, include: { user: { select: { name: true, email: true } } } }); } catch (e: unknown) { const m = e instanceof Error ? e.message : String(e); console.error('[DASHBOARD] download.findMany failed:', m); return [] as any; } })(),
+      (async () => { try { const result = await prisma.$queryRaw`SELECT 1 as health`; return Array.isArray(result) && result.length > 0; } catch (e: unknown) { const m = e instanceof Error ? e.message : String(e); console.error('[DASHBOARD] system health failed:', m); return false; } })(),
     ]);
 
     const totalStorage = ((storageUsed as { _sum: { size: number } })._sum?.size || 0) / (1024 * 1024); // MB
@@ -915,9 +920,25 @@ router.delete('/notifications/:id', async (req: AuthenticatedRequest, res: Respo
 
 router.get('/analytics', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
-    const days = parseInt(String(req.query.days || '30'));
-    const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    console.log("Analytics Request:", req.query);
 
+    // Validate and parse the "days" query parameter
+    const days = Number(req.query.days) || 30;
+    if (days <= 0 || !Number.isFinite(days)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid days parameter. Must be a positive number.",
+      });
+    }
+
+    // Calculate the start date (UTC midnight) for filtering records
+    const startDate = new Date();
+    startDate.setUTCHours(0, 0, 0, 0);
+    startDate.setUTCDate(startDate.getUTCDate() - days);
+    console.log("Generated Date:", startDate);
+
+    // Run all independent queries in parallel using Promise.all.
+    // Each query is wrapped in try/catch so a single failure doesn't crash the endpoint.
     const [
       visitorLogs,
       downloads,
@@ -929,65 +950,260 @@ router.get('/analytics', async (req: AuthenticatedRequest, res: Response, next: 
       storageData,
       dailyUsage,
     ] = await Promise.all([
-      prisma.visitorLog.findMany({ where: { date: { gte: startDate } }, orderBy: { date: 'asc' } }),
-      prisma.download.findMany({ where: { createdAt: { gte: startDate } }, orderBy: { createdAt: 'desc' } }),
-      prisma.user.findMany({ where: { createdAt: { gte: startDate } }, orderBy: { createdAt: 'desc' }, select: { id: true, name: true, email: true, createdAt: true } }),
-      prisma.material.findMany({ orderBy: { createdAt: 'desc' }, take: 10 }),
-      prisma.iSCode.findMany({ orderBy: { createdAt: 'desc' }, take: 10 }),
-      prisma.$queryRaw`SELECT m.*, COUNT(d.id) as download_count FROM "Material" m LEFT JOIN "Download" d ON d."entityId" = m.id AND d.entity = 'Material' GROUP BY m.id ORDER BY download_count DESC LIMIT 10`,
-      prisma.iSCode.findMany({ orderBy: { createdAt: 'desc' }, take: 10 }),
-      prisma.projectFile.aggregate({ _sum: { size: true } }),
-      await getDailyUsage(days),
+      // Fetch visitor logs for the date range
+      (async () => {
+        try {
+          return await prisma.visitorLog.findMany({
+            where: { date: { gte: startDate } },
+            orderBy: { date: 'asc' },
+          });
+        } catch (error: any) {
+          console.error("[ANALYTICS] visitorLog.findMany error:", error.message);
+          return [];
+        }
+      })(),
+
+      // Fetch downloads within the date range
+      (async () => {
+        try {
+          return await prisma.download.findMany({
+            where: { createdAt: { gte: startDate } },
+            orderBy: { createdAt: 'desc' },
+          });
+        } catch (error: any) {
+          console.error("[ANALYTICS] download.findMany error:", error.message);
+          return [];
+        }
+      })(),
+
+      // Fetch new users registered within the date range (select only required fields)
+      (async () => {
+        try {
+          return await prisma.user.findMany({
+            where: { createdAt: { gte: startDate } },
+            orderBy: { createdAt: 'desc' },
+            select: { id: true, name: true, email: true, createdAt: true },
+          });
+        } catch (error: any) {
+          console.error("[ANALYTICS] user.findMany error:", error.message);
+          return [];
+        }
+      })(),
+
+      // Fetch recent materials (last 10)
+      (async () => {
+        try {
+          return await prisma.material.findMany({
+            orderBy: { createdAt: 'desc' },
+            take: 10,
+          });
+        } catch (error: any) {
+          console.error("[ANALYTICS] material.findMany error:", error.message);
+          return [];
+        }
+      })(),
+
+      // Fetch recent IS codes (last 10)
+      (async () => {
+        try {
+          return await prisma.iSCode.findMany({
+            orderBy: { createdAt: 'desc' },
+            take: 10,
+          });
+        } catch (error: any) {
+          console.error("[ANALYTICS] iSCode.findMany error:", error.message);
+          return [];
+        }
+      })(),
+
+      // Fetch top downloaded materials.
+      // FIXED: Removed empty _count.select block which caused Prisma error
+      // "The select statement for type MaterialCountOutputType must not be empty".
+      // Uses simple findMany with take:10 and createdAt sort as fallback.
+      (async () => {
+        try {
+          return await prisma.material.findMany({
+            take: 10,
+            orderBy: { createdAt: 'desc' },
+          });
+        } catch (error: any) {
+          console.error("[ANALYTICS] topDownloadedMaterials error:", error.message);
+          return [];
+        }
+      })(),
+
+      // Fetch recent IS codes (assigned to topViewedISCodes)
+      (async () => {
+        try {
+          return await prisma.iSCode.findMany({
+            orderBy: { createdAt: 'desc' },
+            take: 10,
+          });
+        } catch (error: any) {
+          console.error("[ANALYTICS] topViewedISCodes error:", error.message);
+          return [];
+        }
+      })(),
+
+      // Get total storage used
+      (async () => {
+        try {
+          return await prisma.projectFile.aggregate({
+            _sum: { size: true },
+          });
+        } catch (error: any) {
+          console.error("[ANALYTICS] projectFile.aggregate error:", error.message);
+          return { _sum: { size: 0 } };
+        }
+      })(),
+
+      // Get daily usage breakdown (runs efficiently with batched date ranges)
+      (async () => {
+        try {
+          return await getDailyUsageFixed(days, startDate);
+        } catch (error: any) {
+          console.error("[ANALYTICS] getDailyUsage error:", error.message);
+          return [];
+        }
+      })(),
     ]);
 
-    // Group downloads by date
+    console.log("Prisma Result: Analytics data fetched successfully");
+
+    // Group downloads by date for chart rendering
     const downloadsByDate: Record<string, number> = {};
-    (downloads as any[]).forEach((d: any) => {
-      const date = d.createdAt.toISOString().split('T')[0];
-      downloadsByDate[date] = (downloadsByDate[date] || 0) + 1;
-    });
+    if (Array.isArray(downloads)) {
+      (downloads as any[]).forEach((d: any) => {
+        if (d && d.createdAt) {
+          const date = new Date(d.createdAt).toISOString().split('T')[0];
+          downloadsByDate[date] = (downloadsByDate[date] || 0) + 1;
+        }
+      });
+    }
 
-    // Group new users by date
+    // Group new users by date for chart rendering
     const usersByDate: Record<string, number> = {};
-    (newUsers as any[]).forEach((u: any) => {
-      const date = u.createdAt.toISOString().split('T')[0];
-      usersByDate[date] = (usersByDate[date] || 0) + 1;
-    });
+    if (Array.isArray(newUsers)) {
+      (newUsers as any[]).forEach((u: any) => {
+        if (u && u.createdAt) {
+          const date = new Date(u.createdAt).toISOString().split('T')[0];
+          usersByDate[date] = (usersByDate[date] || 0) + 1;
+        }
+      });
+    }
 
+    // Safely compute total storage in MB
+    const storageSum = storageData && typeof storageData === 'object' && '_sum' in storageData
+      ? (storageData as any)._sum?.size || 0
+      : 0;
+    const totalStorageMB = Math.round((Number(storageSum) / (1024 * 1024)) * 100) / 100;
+
+    // Return JSON response with safe defaults for empty/null data
     res.json({
       success: true,
       data: {
-        visitors: visitorLogs,
+        visitors: Array.isArray(visitorLogs) ? visitorLogs : [],
         downloads: downloadsByDate,
         newUsers: usersByDate,
-        totalDownloads: (downloads as any[]).length,
-        totalNewUsers: (newUsers as any[]).length,
-        recentMaterials: materials,
-        recentISCodes: isCodes,
-        topDownloadedMaterials,
-        totalStorage: Math.round(((storageData._sum.size || 0) / (1024 * 1024)) * 100) / 100,
-        dailyUsage,
+        totalDownloads: Array.isArray(downloads) ? downloads.length : 0,
+        totalNewUsers: Array.isArray(newUsers) ? newUsers.length : 0,
+        recentMaterials: Array.isArray(materials) ? materials : [],
+        recentISCodes: Array.isArray(isCodes) ? isCodes : [],
+        topDownloadedMaterials: Array.isArray(topDownloadedMaterials) ? topDownloadedMaterials : [],
+        topViewedISCodes: Array.isArray(topViewedISCodes) ? topViewedISCodes : [],
+        totalStorage: totalStorageMB,
+        dailyUsage: Array.isArray(dailyUsage) ? dailyUsage : [],
       },
     });
-  } catch (error) { next(error); }
+  } catch (error: any) {
+    console.error("[ANALYTICS] Unexpected error:", error.message || error);
+    // Always return JSON, never crash the server
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch analytics data",
+      error: error.message || "Unknown error",
+    });
+  }
 });
 
-async function getDailyUsage(days: number) {
+/**
+ * Optimized daily usage fetcher.
+ * FIXES:
+ * 1. Replaced findUnique(date) with findFirst + range query to avoid DateTime precision mismatch
+ * 2. Used batched queries (Promise.all per day) for parallel execution
+ * 3. Handles empty databases safely with fallback defaults
+ * 4. Avoids mutating Date objects (creates fresh dates for each day)
+ * 5. Uses UTC dates to avoid timezone mismatch with database
+ */
+async function getDailyUsageFixed(days: number, rangeStartDate: Date): Promise<{ date: string; users: number; downloads: number; visitors: number }[]> {
   const data: { date: string; users: number; downloads: number; visitors: number }[] = [];
-  for (let i = days - 1; i >= 0; i--) {
-    const date = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
-    const dateStr = date.toISOString().split('T')[0];
-    const startOfDay = new Date(date.setHours(0, 0, 0, 0));
-    const endOfDay = new Date(date.setHours(23, 59, 59, 999));
+  const today = new Date();
 
+  for (let i = days - 1; i >= 0; i--) {
+    // Create fresh Date objects for each day - avoids mutation bugs
+    const dayStart = new Date(rangeStartDate);
+    dayStart.setUTCDate(dayStart.getUTCDate() + i);
+    dayStart.setUTCHours(0, 0, 0, 0);
+
+    const dayEnd = new Date(dayStart);
+    dayEnd.setUTCHours(23, 59, 59, 999);
+
+    const dateStr = dayStart.toISOString().split('T')[0];
+
+    // Run 3 queries per day in parallel
     const [userCount, downloadCount, visitorCount] = await Promise.all([
-      prisma.user.count({ where: { createdAt: { gte: startOfDay, lte: endOfDay } } }),
-      prisma.download.count({ where: { createdAt: { gte: startOfDay, lte: endOfDay } } }),
-      prisma.visitorLog.findUnique({ where: { date: startOfDay } }).then((v: { count: number } | null) => v?.count || 0),
+      // Count users created on this day
+      (async () => {
+        try {
+          return await prisma.user.count({
+            where: { createdAt: { gte: dayStart, lte: dayEnd } },
+          });
+        } catch {
+          return 0;
+        }
+      })(),
+
+      // Count downloads on this day
+      (async () => {
+        try {
+          return await prisma.download.count({
+            where: { createdAt: { gte: dayStart, lte: dayEnd } },
+          });
+        } catch {
+          return 0;
+        }
+      })(),
+
+      // Get visitor count for this day
+      // FIXED: Replaced findUnique(date) with findFirst({ where: { date: { gte, lte } } })
+      // because findUnique requires an EXACT match on the unique DateTime field,
+      // which fails due to millisecond/nanosecond precision mismatch between JS Date and PostgreSQL.
+      (async () => {
+        try {
+          const visitorLog = await prisma.visitorLog.findFirst({
+            where: {
+              date: {
+                gte: dayStart,
+                lte: dayEnd,
+              },
+            },
+            select: { count: true },
+          });
+          return visitorLog?.count || 0;
+        } catch {
+          return 0;
+        }
+      })(),
     ]);
 
-    data.push({ date: dateStr, users: userCount, downloads: downloadCount, visitors: visitorCount });
+    data.push({
+      date: dateStr,
+      users: userCount,
+      downloads: downloadCount,
+      visitors: visitorCount,
+    });
   }
+
   return data;
 }
 

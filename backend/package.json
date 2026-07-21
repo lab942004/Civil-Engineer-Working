@@ -1,7 +1,7 @@
 {
   "name": "civil-engineer-backend",
   "version": "1.0.0",
-  "description": "AI Civil Engineering Assistant - Backend API",
+  "description": "Civil Engineering Assistant - Backend API",
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",

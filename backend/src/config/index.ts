@@ -54,12 +54,12 @@ export const config = {
     user: process.env.SMTP_USER || '',
     pass: process.env.SMTP_PASS || '',
     from: process.env.EMAIL_FROM || process.env.SMTP_USER || 'noreply@yourdomain.com',
-    fromName: process.env.EMAIL_FROM_NAME || 'Civil Engineer Assistant',
+    fromName: process.env.EMAIL_FROM_NAME || 'Civil Engineering Assistant',
   },
   resend: {
     apiKey: process.env.RESEND_API_KEY || '',
     from: process.env.RESEND_FROM_EMAIL || process.env.EMAIL_FROM || 'onboarding@resend.dev',
-    fromName: process.env.EMAIL_FROM_NAME || 'Civil Engineer Assistant',
+    fromName: process.env.EMAIL_FROM_NAME || 'Civil Engineering Assistant',
   },
   otp: {
     length: 6,

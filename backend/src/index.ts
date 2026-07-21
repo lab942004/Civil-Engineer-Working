@@ -51,7 +51,7 @@ app.use(morgan(config.nodeEnv === 'production' ? 'combined' : 'dev'));
 app.get('/api/v1/health', (req, res) => {
   res.json({
     success: true,
-    message: 'AI Civil Engineering Assistant API',
+    message: 'Civil Engineering Assistant API',
     version: '1.0.0',
     environment: config.nodeEnv,
     timestamp: new Date().toISOString(),
@@ -70,7 +70,7 @@ app.use(errorHandler);
 // Start Server
 app.listen(PORT, () => {
   console.log(`\n========================================`);
-  console.log(`  🏗️  AI Civil Engineering Assistant`);
+  console.log(`  🏗️  Civil Engineering Assistant`);
   console.log(`========================================`);
   console.log(`  📡 Server:    http://localhost:${PORT}`);
   console.log(`  🔧 Health:    http://localhost:${PORT}/api/v1/health`);
