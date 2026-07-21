@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '../generated/prisma';
 
 // BUG FIX: The original code created a `new PrismaClient()` in every service
 // file and in nearly every inline route handler in routes/index.ts. Each
