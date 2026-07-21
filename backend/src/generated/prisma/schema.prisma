@@ -1,0 +1,655 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../backend/src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ========== USER & AUTH ==========
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  password      String
+  name          String
+  role          UserRole  @default(CIVIL_ENGINEER)
+  avatar        String?
+  phone         String?
+  bio           String?
+  isVerified    Boolean   @default(false)
+  isActive      Boolean   @default(true)
+  refreshToken  String?
+  resetToken    String?
+  resetTokenExp DateTime?
+
+  // Email OTP verification
+  otpCodeHash   String?
+  otpExpiresAt  DateTime?
+  otpAttempts   Int       @default(0)
+  otpLastSentAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  projects          Project[]
+  projectFiles      ProjectFile[]
+  inspections       Inspection[]
+  dailyProgress     DailyProgress[]
+  notes             Note[]
+  notifications     Notification[]
+  activityLogs      ActivityLog[]
+  bookmarks         Bookmark[]
+  downloads         Download[]
+  recentActivities  RecentActivity[]
+  favorites         Favorite[]
+  feedbacks         Feedback[]
+  supportTickets    SupportTicket[]
+  savedCalculations SavedCalculation[]
+  settings          Settings?
+  rateAnalyses      RateAnalysis[]
+  boqs              BOQ[]
+  estimations       Estimation[]
+
+  // Admin relations
+  adminNotificationsCreated AdminNotification[] @relation("AdminNotificationCreator")
+  adminActivityLogs         AdminActivityLog[]
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  CIVIL_ENGINEER
+  SITE_ENGINEER
+  STRUCTURAL_ENGINEER
+  STUDENT
+  CONTRACTOR
+  CLIENT
+  GUEST
+}
+
+// ========== ROLE & PERMISSIONS ==========
+model Role {
+  id          String       @id @default(uuid())
+  name        String       @unique
+  description String?
+  permissions Permission[]
+  createdAt   DateTime     @default(now())
+}
+
+model Permission {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  roleId      String
+  role        Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+}
+
+// ========== PROJECTS ==========
+model Project {
+  id          String        @id @default(uuid())
+  name        String
+  description String?
+  location    String?
+  projectType ProjectType   @default(OTHER)
+  status      ProjectStatus @default(PLANNING)
+  startDate   DateTime?
+  endDate     DateTime?
+  budget      Float?
+  clientName  String?
+  userId      String
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  deletedAt   DateTime?
+
+  members       ProjectMember[]
+  files         ProjectFile[]
+  boqs          BOQ[]
+  estimations   Estimation[]
+  inspections   Inspection[]
+  dailyProgress DailyProgress[]
+  reports       Report[]
+  notes         Note[]
+}
+
+enum ProjectType {
+  RESIDENTIAL
+  COMMERCIAL
+  ROAD
+  BRIDGE
+  DRAIN
+  CANAL
+  FOUNDATION
+  WALL
+  ROOF
+  OTHER
+}
+
+enum ProjectStatus {
+  PLANNING
+  IN_PROGRESS
+  COMPLETED
+  ON_HOLD
+  CANCELLED
+}
+
+model ProjectMember {
+  id        String   @id @default(uuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  role      String
+  joinedAt  DateTime @default(now())
+}
+
+// ========== CALCULATIONS ==========
+model CalculatorCategory {
+  id          String       @id @default(uuid())
+  name        String
+  slug        String       @unique
+  description String?
+  icon        String?
+  calculators Calculator[]
+  createdAt   DateTime     @default(now())
+}
+
+model Calculator {
+  id          String             @id @default(uuid())
+  name        String
+  slug        String             @unique
+  description String?
+  formula     String?
+  categoryId  String
+  category    CalculatorCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  inputs      CalculatorInput[]
+  createdAt   DateTime           @default(now())
+}
+
+model CalculatorInput {
+  id           String     @id @default(uuid())
+  label        String
+  name         String
+  type         String     @default("number")
+  unit         String?
+  placeholder  String?
+  required     Boolean    @default(true)
+  min          Float?
+  max          Float?
+  defaultValue Float?
+  calculatorId String
+  calculator   Calculator @relation(fields: [calculatorId], references: [id], onDelete: Cascade)
+}
+
+model SavedCalculation {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  calculator String
+  input      Json
+  result     Json
+  createdAt  DateTime @default(now())
+}
+
+// ========== MATERIALS ==========
+model Material {
+  id             String             @id @default(uuid())
+  name           String
+  slug           String             @unique
+  category       MaterialCategory
+  description    String?
+  properties     MaterialProperty[]
+  specifications Specification[]
+  uses           String[]
+  advantages     String[]
+  disadvantages  String[]
+  images         String[]
+  pdfCatalog     String?
+  createdAt      DateTime           @default(now())
+}
+
+enum MaterialCategory {
+  CEMENT
+  SAND
+  AGGREGATE
+  STEEL
+  BRICKS
+  BLOCKS
+  TILES
+  WOOD
+  GLASS
+  PVC
+  PIPES
+  PAINT
+  ADMIXTURES
+  OTHER
+}
+
+model MaterialProperty {
+  id         String   @id @default(uuid())
+  name       String
+  value      String
+  unit       String?
+  materialId String
+  material   Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+}
+
+model Specification {
+  id         String   @id @default(uuid())
+  name       String
+  value      String
+  standard   String?
+  materialId String
+  material   Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+}
+
+// ========== IS CODES ==========
+model ISCode {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  title       String
+  category    String
+  description String?
+  year        Int
+  pdfUrl      String?
+  pages       Int?
+  status      String   @default("ACTIVE")
+  createdAt   DateTime @default(now())
+}
+
+// ========== BOQ ==========
+model BOQ {
+  id          String    @id @default(uuid())
+  projectId   String?
+  project     Project?  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  items       BOQItem[]
+  totalCost   Float     @default(0)
+  status      String    @default("DRAFT")
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model BOQItem {
+  id          String @id @default(uuid())
+  itemNo      Int
+  description String
+  unit        String
+  quantity    Float
+  rate        Float
+  amount      Float
+  boqId       String
+  boq         BOQ    @relation(fields: [boqId], references: [id], onDelete: Cascade)
+}
+
+// ========== ESTIMATION ==========
+model Estimation {
+  id           String                @id @default(uuid())
+  projectId    String?
+  project      Project?              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title        String
+  buildingType String
+  area         Float
+  costPerSqft  Float
+  totalCost    Float
+  breakdown    EstimationBreakdown[]
+  userId       String
+  user         User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime              @default(now())
+}
+
+model EstimationBreakdown {
+  id           String     @id @default(uuid())
+  category     String
+  percentage   Float
+  amount       Float
+  items        Json
+  estimationId String
+  estimation   Estimation @relation(fields: [estimationId], references: [id], onDelete: Cascade)
+}
+
+// ========== FILES ==========
+model ProjectFile {
+  id           String   @id @default(uuid())
+  originalName String
+  url          String
+  publicId     String
+  size         Int
+  format       String
+  folder       String
+  category     String?
+  notes        String?
+  rateItems    Json?
+  version      Int      @default(1)
+  projectId    String?
+  project      Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  uploadedById String
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+}
+
+// ========== INSPECTION ==========
+model Inspection {
+  id           String           @id @default(uuid())
+  projectId    String?
+  project      Project?         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title        String
+  date         DateTime
+  inspector    String
+  checklist    InspectionItem[]
+  remarks      String?
+  safetyRating Float?
+  images       String[]
+  status       String           @default("PENDING")
+  userId       String
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime         @default(now())
+}
+
+model InspectionItem {
+  id           String     @id @default(uuid())
+  description  String
+  isPassed     Boolean    @default(false)
+  remarks      String?
+  inspectionId String
+  inspection   Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+}
+
+// ========== DAILY PROGRESS ==========
+model DailyProgress {
+  id             String   @id @default(uuid())
+  projectId      String
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  date           DateTime
+  labourCount    Int
+  equipmentCount Int
+  weather        String
+  temperature    Float?
+  materialUsed   String?
+  workDone       String
+  photos         String[]
+  pdfUrl         String?
+  createdById    String
+  createdBy      User     @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+}
+
+// ========== NOTES ==========
+model Note {
+  id           String   @id @default(uuid())
+  title        String
+  content      String
+  isBookmarked Boolean  @default(false)
+  tags         String[]
+  projectId    String?
+  project      Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// ========== REPORTS ==========
+model Report {
+  id        String   @id @default(uuid())
+  title     String
+  type      String
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  content   String?
+  pdfUrl    String?
+  status    String   @default("DRAFT")
+  createdAt DateTime @default(now())
+}
+
+// ========== NOTIFICATIONS ==========
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  type      String   @default("INFO")
+  isRead    Boolean  @default(false)
+  link      String?
+  createdAt DateTime @default(now())
+}
+
+// ========== ACTIVITY LOGS ==========
+model ActivityLog {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action    String
+  entity    String
+  entityId  String
+  metadata  Json?
+  createdAt DateTime @default(now())
+}
+
+// ========== SETTINGS ==========
+model Settings {
+  id         String  @id @default(uuid())
+  userId     String  @unique
+  user       User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  theme      String  @default("light")
+  language   String  @default("en")
+  timezone   String  @default("Asia/Kolkata")
+  emailNotif Boolean @default(true)
+  pushNotif  Boolean @default(true)
+}
+
+// ========== BOOKMARKS, DOWNLOADS, FAVORITES ==========
+model Bookmark {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entity    String
+  entityId  String
+  createdAt DateTime @default(now())
+}
+
+model Download {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entity    String
+  entityId  String
+  createdAt DateTime @default(now())
+}
+
+model RecentActivity {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action    String
+  entity    String
+  entityId  String
+  metadata  Json?
+  createdAt DateTime @default(now())
+}
+
+model Favorite {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entity    String
+  entityId  String
+  createdAt DateTime @default(now())
+}
+
+// ========== FEEDBACK & SUPPORT ==========
+model Feedback {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject   String
+  message   String
+  rating    Int?
+  createdAt DateTime @default(now())
+}
+
+model SupportTicket {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject   String
+  message   String
+  status    String   @default("OPEN")
+  priority  String   @default("MEDIUM")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ========== UNIT CONVERSION HISTORY ==========
+model UnitConversion {
+  id        String   @id @default(uuid())
+  userId    String?
+  category  String
+  fromUnit  String
+  toUnit    String
+  value     Float
+  result    Float
+  createdAt DateTime @default(now())
+}
+
+// ========== SURVEY DATA ==========
+model SurveyData {
+  id          String   @id @default(uuid())
+  projectId   String?
+  surveyType  String
+  coordinates Json?
+  data        Json
+  createdAt   DateTime @default(now())
+}
+
+// ========== LEARNING ==========
+model Article {
+  id        String   @id @default(uuid())
+  title     String
+  slug      String   @unique
+  content   String
+  excerpt   String?
+  category  String
+  author    String?
+  imageUrl  String?
+  readTime  Int?
+  tags      String[]
+  createdAt DateTime @default(now())
+}
+
+model Tutorial {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  videoUrl    String?
+  duration    Int?
+  difficulty  String   @default("BEGINNER")
+  category    String
+  createdAt   DateTime @default(now())
+}
+
+// ========== RATE ANALYSIS ==========
+model RateAnalysis {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name            String
+  description     String?
+  items           Json     @default("[]")
+  transportCost   Float    @default(0)
+  taxPercent      Float    @default(12)
+  overheadPercent Float    @default(5)
+  profitPercent   Float    @default(10)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// ========== ADMIN EXTENSIONS ==========
+
+// Admin notification broadcasts to users
+model AdminNotification {
+  id           String   @id @default(uuid())
+  title        String
+  message      String
+  type         String   @default("ANNOUNCEMENT") // ANNOUNCEMENT, MAINTENANCE, NEW_MATERIAL, NEW_ISCODE, LEARNING_UPDATE, GENERAL
+  audience     String   @default("ALL") // ALL, SELECTED_USERS, ROLE_BASED
+  recipientIds String[] // User IDs if SELECTED_USERS
+  roleFilter   String? // Role if ROLE_BASED
+  createdById  String
+  createdBy    User     @relation("AdminNotificationCreator", fields: [createdById], references: [id])
+  createdAt    DateTime @default(now())
+}
+
+// Site-wide settings for admin panel
+model SiteSettings {
+  id                 String   @id @default(uuid())
+  websiteName        String   @default("Civil Engineer Assistant")
+  logo               String?
+  favicon            String?
+  banner             String?
+  contactEmail       String?
+  contactPhone       String?
+  address            String?
+  smtpHost           String?
+  smtpPort           Int?
+  smtpUser           String?
+  smtpPass           String?
+  smtpSecure         Boolean  @default(true)
+  cloudinaryCloud    String?
+  cloudinaryKey      String?
+  cloudinarySecret   String?
+  jwtSecret          String?
+  jwtExpiresIn       String?
+  maintenanceMode    Boolean  @default(false)
+  maintenanceMessage String?
+  theme              String   @default("light")
+  primaryColor       String   @default("#2563eb")
+  facebookUrl        String?
+  twitterUrl         String?
+  linkedinUrl        String?
+  instagramUrl       String?
+  youtubeUrl         String?
+  updatedAt          DateTime @updatedAt
+  updatedById        String?
+}
+
+// Admin activity log (separate from user activity logs)
+model AdminActivityLog {
+  id        String   @id @default(uuid())
+  adminId   String
+  admin     User     @relation(fields: [adminId], references: [id])
+  action    String
+  entity    String
+  entityId  String?
+  details   String?
+  ipAddress String?
+  createdAt DateTime @default(now())
+}
+
+// Website analytics tracking
+model Analytics {
+  id            String   @id @default(uuid())
+  date          DateTime @default(now())
+  visitors      Int      @default(0)
+  pageViews     Int      @default(0)
+  downloads     Int      @default(0)
+  registrations Int      @default(0)
+  storageUsed   BigInt   @default(0)
+  createdAt     DateTime @default(now())
+}
+
+// Daily visitor count
+model VisitorLog {
+  id        String   @id @default(uuid())
+  date      DateTime @default(now())
+  count     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@unique([date])
+}
