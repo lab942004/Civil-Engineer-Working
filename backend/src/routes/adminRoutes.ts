@@ -1404,7 +1404,7 @@ function stripSensitiveSettingsFields(body: any) {
 // Get site settings
 router.get('/settings', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
-    let settings = await prisma.siteSettings.findFirst({ select: SETTINGS_SELECT });
+    let settings: any = await prisma.siteSettings.findFirst({ select: SETTINGS_SELECT });
     if (!settings) {
       settings = await prisma.siteSettings.create({ data: {}, select: SETTINGS_SELECT });
     }
@@ -1416,12 +1416,13 @@ router.get('/settings', async (req: AuthenticatedRequest, res: Response, next: N
 router.put('/settings', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const safeBody = stripSensitiveSettingsFields(req.body);
-    let settings = await prisma.siteSettings.findFirst();
-    if (!settings) {
+    const existing = await prisma.siteSettings.findFirst({ select: { id: true } });
+    let settings: any;
+    if (!existing) {
       settings = await prisma.siteSettings.create({ data: { ...safeBody, updatedById: req.user!.id }, select: SETTINGS_SELECT });
     } else {
       settings = await prisma.siteSettings.update({
-        where: { id: settings.id },
+        where: { id: existing.id },
         data: { ...safeBody, updatedById: req.user!.id },
         select: SETTINGS_SELECT,
       });
