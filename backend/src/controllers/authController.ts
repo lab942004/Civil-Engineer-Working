@@ -68,7 +68,15 @@ export const getProfile = async (req: AuthenticatedRequest, res: Response, next:
 
 export const updateProfile = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
-    const profile = await authService.updateProfile(req.user!.id, req.body);
+    // SECURITY FIX (critical): this used to forward the entire raw req.body
+    // straight into authService.updateProfile() -> prisma.user.update({data}).
+    // The function's TS parameter type says {name?, phone?, bio?, avatar?},
+    // but that's compile-time only - it does not strip anything at runtime.
+    // Since `role` is a real column on User, any authenticated user could
+    // POST { "role": "SUPER_ADMIN" } to PUT /api/v1/auth/me and instantly
+    // grant themselves Super Admin. Only forward an explicit allowlist.
+    const { name, phone, bio, avatar } = req.body;
+    const profile = await authService.updateProfile(req.user!.id, { name, phone, bio, avatar });
     res.json({ success: true, message: 'Profile updated', data: profile });
   } catch (error) { next(error); }
 };

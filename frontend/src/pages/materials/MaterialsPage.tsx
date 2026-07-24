@@ -8,9 +8,10 @@ import { Search, Package, ChevronRight, Loader2, Eye, Download } from 'lucide-re
 import type { Material } from '@/types';
 
 const categoryIcons: Record<string, string> = {
-  CEMENT: '🧱', SAND: '⏳', AGGREGATE: '🪨', STEEL: '⚙️', BRICKS: '🧱',
+  CEMENT:'🧱', SAND: '⏳', AGGREGATE: '🪨', STEEL: '⚙️', BRICKS: '🧱',
   BLOCKS: '📦', TILES: '🔲', WOOD: '🪵', GLASS: '🪟', PVC: '🔧',
   PIPES: '🔩', PAINT: '🎨', ADMIXTURES: '🧪', OTHER: '📦',
+  CONCRETE: '🧱', PAINTS: '🎨', INSULATION: '🧱', PLUMBING: '🔧', ELECTRICAL: '💡', ROOFING: '🏠', ADHESIVES: '🧪'
 };
 
 export default function MaterialsPage() {

@@ -15,9 +15,27 @@ import { emailService } from './emailService';
 import { config } from '../config';
 
 export class AuthService {
+  // SECURITY FIX (critical, pre-publish): `register()` used to write
+  // `role: data.role as any` straight from the public request body with no
+  // validation at all. Anyone could POST directly to /api/v1/auth/register
+  // (bypassing the frontend's dropdown entirely) with
+  // `{ ..., "role": "SUPER_ADMIN" }` and get a fully-privileged admin
+  // account — including access to the Admin Portal, user management, and
+  // site settings — with zero authentication required. The public
+  // registration form only ever offers non-privileged professional roles
+  // (see frontend/src/pages/auth/RegisterPage.tsx), so the backend now
+  // enforces that same allowlist itself instead of trusting the client.
+  // ADMIN/SUPER_ADMIN accounts can only be created by an existing
+  // SUPER_ADMIN through the protected /admin/users endpoint.
+  private static PUBLIC_REGISTRATION_ROLES = new Set([
+    'CIVIL_ENGINEER', 'SITE_ENGINEER', 'STRUCTURAL_ENGINEER', 'STUDENT', 'CONTRACTOR', 'CLIENT',
+  ]);
+
   async register(data: { name: string; email: string; password: string; role: string }) {
     const existing = await prisma.user.findUnique({ where: { email: data.email } });
     if (existing) throw new AppError('Email already registered', 400);
+
+    const safeRole = AuthService.PUBLIC_REGISTRATION_ROLES.has(data.role) ? data.role : 'CIVIL_ENGINEER';
 
     const hashedPassword = await hashPassword(data.password);
 
@@ -30,7 +48,7 @@ export class AuthService {
         name: data.name,
         email: data.email,
         password: hashedPassword,
-        role: data.role as any,
+        role: safeRole as any,
         otpCodeHash,
         otpExpiresAt,
         otpAttempts: 0,
@@ -183,6 +201,10 @@ export class AuthService {
 
     const user = await prisma.user.findFirst({ where: { id: payload.id, refreshToken } });
     if (!user) throw new AppError('Invalid refresh token', 401);
+    // SECURITY FIX: without this, a suspended user could keep calling
+    // /auth/refresh forever to mint new access tokens, since suspension
+    // was only ever checked at the original login.
+    if (!user.isActive) throw new AppError('Account is deactivated', 403);
 
     const newAccessToken = generateAccessToken(user.id, user.email, user.role);
     const newRefreshToken = generateRefreshToken(user.id, user.email, user.role);
@@ -245,7 +267,10 @@ export class AuthService {
   async updateProfile(userId: string, data: { name?: string; phone?: string; bio?: string; avatar?: string }) {
     const user = await prisma.user.update({
       where: { id: userId },
-      data,
+      // Explicit field-by-field assignment (not `data` spread) so this
+      // can never accidentally write `role`/`isVerified`/etc. even if a
+      // future caller passes through a larger object.
+      data: { name: data.name, phone: data.phone, bio: data.bio, avatar: data.avatar },
       select: { id: true, name: true, email: true, role: true, avatar: true, phone: true, bio: true },
     });
     return user;

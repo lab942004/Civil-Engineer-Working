@@ -65,6 +65,15 @@ export default function MaterialLibraryPage() {
           <option value="TILES">Tiles</option>
           <option value="WOOD">Wood</option>
           <option value="GLASS">Glass</option>
+          <option value="CONCRETE">Concrete</option>
+          <option value="PAINTS">Paints</option>
+          <option value="INSULATION">Insulation</option>
+          <option value="PLUMBING">Plumbing</option>
+          <option value="ELECTRICAL">Electrical</option>
+          <option value="ROOFING">Roofing</option>
+          <option value="ADHESIVES">Adhesives</option>
+          <option value="ADMIXTURES">Admixtures</option>
+          <option value="OTHER">Other</option>
         </select>
       </div>
 
@@ -162,6 +171,15 @@ function MaterialForm({ materialId, onClose, onSuccess }: { materialId: string |
               <option value="TILES">Tiles</option>
               <option value="WOOD">Wood</option>
               <option value="GLASS">Glass</option>
+              <option value="CONCRETE">Concrete</option>
+              <option value="PAINTS">Paints</option>
+              <option value="INSULATION">Insulation</option>
+              <option value="PLUMBING">Plumbing</option>
+              <option value="ELECTRICAL">Electrical</option>
+              <option value="ROOFING">Roofing</option>
+              <option value="ADHESIVES">Adhesives</option>
+              <option value="ADMIXTURES">Admixtures</option>
+              <option value="OTHER">Other</option>
             </select>
           </div>
           <textarea placeholder="Description" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={3} className="input-field" />

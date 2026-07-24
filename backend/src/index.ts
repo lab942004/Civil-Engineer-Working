@@ -7,10 +7,29 @@ import rateLimit from 'express-rate-limit';
 import { config } from './config';
 import routes from './routes';
 import adminRoutes from './routes/adminRoutes';
-import uploadRoutes from './routes/uploadRoutes';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 
 dotenv.config();
+
+// SECURITY FIX (pre-publish): `config.jwt.secret`/`refreshSecret` fall back
+// to hardcoded strings (see src/config/index.ts) if the JWT_SECRET /
+// JWT_REFRESH_SECRET env vars aren't set. Those fallback strings are
+// sitting in this repo's source code, so anyone who has seen this codebase
+// could forge a valid JWT for any user — including an admin — against a
+// deployment that forgot to set real secrets. Refuse to boot in production
+// rather than silently running with a publicly-known signing key.
+if (config.nodeEnv === 'production') {
+  const insecureDefaults = [
+    'super-secret-key-change-in-production',
+    'refresh-secret-key-change-in-production',
+  ];
+  if (insecureDefaults.includes(config.jwt.secret) || insecureDefaults.includes(config.jwt.refreshSecret)) {
+    console.error('\n🚨 FATAL: JWT_SECRET / JWT_REFRESH_SECRET are not set (or still using the default placeholder values).');
+    console.error('   Set real, random secrets in your environment before running in production.');
+    console.error('   e.g. openssl rand -base64 48\n');
+    process.exit(1);
+  }
+}
 
 const app = express();
 const PORT = config.port;
@@ -61,7 +80,6 @@ app.get('/api/v1/health', (req, res) => {
 // API Routes
 app.use('/api/v1', routes);
 app.use('/api/v1/admin', adminRoutes);
-app.use('/api/v1', uploadRoutes);
 
 // Error Handling
 app.use(notFoundHandler);

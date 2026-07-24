@@ -148,6 +148,7 @@ function ISCodeForm({ codeId, onClose, onSuccess }: { codeId: string | null; onC
             label="PDF Document"
             folder="iscodes"
             accept="application/pdf"
+            maxSizeMB={100}
           />
           <input type="number" placeholder="Pages" value={form.pages} onChange={e => setForm({ ...form, pages: e.target.value })} className="input-field" />
           <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })} className="input-field">

@@ -50,7 +50,7 @@ export const compareOtp = async (otp: string, hash: string): Promise<boolean> =>
 };
 
 export const verifyRefreshToken = (token: string): { id: string; email: string; role: string } => {
-  return jwt.verify(token, config.jwt.refreshSecret) as { id: string; email: string; role: string };
+  return jwt.verify(token, config.jwt.refreshSecret, { algorithms: ['HS256'] }) as { id: string; email: string; role: string };
 };
 
 export const paginate = (page: number = 1, limit: number = 10) => {

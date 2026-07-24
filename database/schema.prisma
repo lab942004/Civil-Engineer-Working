@@ -1,5 +1,6 @@
 generator client {
   provider = "prisma-client-js"
+  output   = "../backend/node_modules/.prisma/client"
 }
 
 datasource db {
@@ -49,6 +50,7 @@ model User {
   settings      Settings?
   rateAnalyses  RateAnalysis[]
   boqs          BOQ[]
+  reports       Report[]
   estimations   Estimation[]
 
   // Admin relations
@@ -219,9 +221,13 @@ enum MaterialCategory {
   TILES
   WOOD
   GLASS
-  PVC
-  PIPES
-  PAINT
+  CONCRETE
+  PAINTS
+  INSULATION
+  PLUMBING
+  ELECTRICAL
+  ROOFING
+  ADHESIVES
   ADMIXTURES
   OTHER
 }
@@ -400,6 +406,8 @@ model Report {
   type      String
   projectId String?
   project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   content   String?
   pdfUrl    String?
   status    String   @default("DRAFT")

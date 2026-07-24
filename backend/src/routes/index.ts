@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma';
 import { authenticate, authorize } from '../middleware/auth';
+import { adminOnly } from '../middleware/adminAuth';
 import { createCrudController } from '../controllers/crudController';
 import { CrudService } from '../services/crudService';
 import authRoutes from './authRoutes';
@@ -12,16 +13,33 @@ const router = Router();
 router.use('/auth', authRoutes);
 router.use('/uploads', uploadRoutes);
 
-// Generic CRUD route factory with optional user-scoping
-function createCrudRoutes(basePath: string, service: any, entityName: string, roles?: string[], scopeToUser: boolean = false) {
+// Generic CRUD route factory with optional user-scoping.
+//
+// SECURITY FIX (audit finding): materials/iscodes/calculators/learning
+// articles+tutorials are shared reference content meant to be managed only
+// through the admin panel, but were registered here with no `roles` and no
+// scoping at all - meaning ANY authenticated user (a STUDENT, CONTRACTOR,
+// etc.) could POST/PUT/DELETE them directly via this public API, not just
+// read them. `adminWriteOnly` keeps GET open to any authenticated user
+// (intentional - everyone should be able to read this content) while
+// requiring ADMIN/SUPER_ADMIN for create/update/delete.
+function createCrudRoutes(
+  basePath: string,
+  service: any,
+  entityName: string,
+  roles?: string[],
+  scopeToUser: boolean = false,
+  adminWriteOnly: boolean = false
+) {
   const controller = createCrudController(service, entityName, scopeToUser);
-  const auth = roles ? [authenticate, authorize(...roles)] : [authenticate];
+  const readAuth = roles ? [authenticate, authorize(...roles)] : [authenticate];
+  const writeAuth = adminWriteOnly ? [authenticate, adminOnly] : readAuth;
 
-  router.get(`/${basePath}`, ...auth, controller.list);
-  router.get(`/${basePath}/:id`, ...auth, controller.getById);
-  router.post(`/${basePath}`, ...auth, controller.create);
-  router.put(`/${basePath}/:id`, ...auth, controller.update);
-  router.delete(`/${basePath}/:id`, ...auth, controller.delete);
+  router.get(`/${basePath}`, ...readAuth, controller.list);
+  router.get(`/${basePath}/:id`, ...readAuth, controller.getById);
+  router.post(`/${basePath}`, ...writeAuth, controller.create);
+  router.put(`/${basePath}/:id`, ...writeAuth, controller.update);
+  router.delete(`/${basePath}/:id`, ...writeAuth, controller.delete);
 }
 
 // Helper to create services for additional models
@@ -43,14 +61,20 @@ import {
 // User-scoped routes (filter by userId automatically)
 createCrudRoutes('projects', projectService, 'Project', undefined, true);
 createCrudRoutes('project-members', modelServices['ProjectMember'], 'ProjectMember');
-createCrudRoutes('calculators', calculatorService, 'Calculator');
-createCrudRoutes('materials', materialService, 'Material');
-createCrudRoutes('iscodes', isCodeService, 'ISCode');
+// Shared reference content: readable by any authenticated user, writable
+// only by admins (see createCrudRoutes comment above for why this matters).
+createCrudRoutes('calculators', calculatorService, 'Calculator', undefined, false, true);
+createCrudRoutes('materials', materialService, 'Material', undefined, false, true);
+createCrudRoutes('iscodes', isCodeService, 'ISCode', undefined, false, true);
 createCrudRoutes('boq', boqService, 'BOQ', undefined, true);
 createCrudRoutes('estimations', estimationService, 'Estimation', undefined, true);
 createCrudRoutes('inspections', inspectionService, 'Inspection', undefined, true);
 createCrudRoutes('daily-progress', dailyProgressService, 'DailyProgress', undefined, true);
-createCrudRoutes('reports', reportService, 'Report');
+// SECURITY FIX: Report had no owner column and no scoping at all - any
+// authenticated user could list/edit/delete any other user's project
+// reports. Added a `userId` column to Report (schema.prisma) and scope this
+// route the same way projects/boq/estimations/etc. already are.
+createCrudRoutes('reports', reportService, 'Report', undefined, true);
 createCrudRoutes('notes', noteService, 'Note', undefined, true);
 // File uploads are now handled by uploadRoutes (mounted at /uploads), which
 // correctly stamps `uploadedById` and talks to Cloudinary. The old generic
@@ -61,10 +85,13 @@ createCrudRoutes('notifications', notificationService, 'Notification', undefined
 createCrudRoutes('feedback', feedbackService, 'Feedback', undefined, true);
 createCrudRoutes('support-tickets', supportTicketService, 'SupportTicket', undefined, true);
 
-// Learning & Reference routes
-createCrudRoutes('learning/articles', modelServices['Article'], 'Article');
-createCrudRoutes('learning/tutorials', modelServices['Tutorial'], 'Tutorial');
-createCrudRoutes('unit-conversions', modelServices['UnitConversion'], 'UnitConversion');
+// Learning & Reference routes (admin-managed content, public read)
+createCrudRoutes('learning/articles', modelServices['Article'], 'Article', undefined, false, true);
+createCrudRoutes('learning/tutorials', modelServices['Tutorial'], 'Tutorial', undefined, false, true);
+// SECURITY FIX: UnitConversion has a userId column but wasn't scoped, so any
+// authenticated user could read/edit/delete any other user's saved
+// conversions.
+createCrudRoutes('unit-conversions', modelServices['UnitConversion'], 'UnitConversion', undefined, true);
 
 // User-specific data routes
 createCrudRoutes('saved-calculations', modelServices['SavedCalculation'], 'SavedCalculation', undefined, true);

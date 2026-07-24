@@ -18,6 +18,8 @@ interface FileUploadProps {
   label?: string;
   folder?: string;
   multiple?: boolean;
+  /** Max client-side file size in MB before even attempting the upload (default: 10MB) */
+  maxSizeMB?: number;
 }
 
 export default function FileUpload({
@@ -27,6 +29,7 @@ export default function FileUpload({
   accept = 'image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.zip,.rar,.csv,.txt',
   label = 'Upload File',
   folder = 'admin-uploads',
+  maxSizeMB = 10,
 }: FileUploadProps) {
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState<string | null>(currentUrl || null);
@@ -36,9 +39,8 @@ export default function FileUpload({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate file size (10MB max)
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error('File size must be less than 10MB');
+    if (file.size > maxSizeMB * 1024 * 1024) {
+      toast.error(`File size must be less than ${maxSizeMB}MB`);
       if (inputRef.current) inputRef.current.value = '';
       return;
     }
@@ -53,7 +55,11 @@ export default function FileUpload({
       const token = localStorage.getItem('adminToken');
       const API_BASE = import.meta.env.VITE_API_URL || '/api/v1';
 
-      const res = await fetch(`${API_BASE}/upload`, {
+      // folder is passed both as a query param (so the backend can pick the
+      // right size limit / storage bucket before it starts parsing the
+      // multipart body) and in the form body (used once the upload record
+      // itself is created).
+      const res = await fetch(`${API_BASE}/uploads/upload?folder=${encodeURIComponent(folder)}`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,

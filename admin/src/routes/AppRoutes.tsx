@@ -1,22 +1,35 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { lazy, Suspense } from 'react';
 import AdminLayout from '../layouts/AdminLayout';
-import LoginPage from '../pages/Login/LoginPage';
-import DashboardPage from '../pages/Dashboard/DashboardPage';
-import UsersPage from '../pages/Users/UsersPage';
-import MaterialLibraryPage from '../pages/MaterialLibrary/MaterialLibraryPage';
-import ISCodesPage from '../pages/ISCodes/ISCodesPage';
-import LearningCenterPage from '../pages/LearningCenter/LearningCenterPage';
-import CategoriesPage from '../pages/Categories/CategoriesPage';
-import NotificationsPage from '../pages/Notifications/NotificationsPage';
-import ReportsPage from '../pages/Reports/ReportsPage';
-import AnalyticsPage from '../pages/Analytics/AnalyticsPage';
-import SettingsPage from '../pages/Settings/SettingsPage';
-import ProfilePage from '../pages/Profile/ProfilePage';
-import DownloadsPage from '../pages/Downloads/DownloadsPage';
-import ActivityLogsPage from '../pages/ActivityLogs/ActivityLogsPage';
+
+// Same fix as the main frontend: statically importing every admin page
+// bundled them all into one ~800 kB chunk that loaded up front regardless
+// of which page was opened. Lazy-loading splits each page into its own
+// chunk that only downloads when visited.
+const LoginPage = lazy(() => import('../pages/Login/LoginPage'));
+const DashboardPage = lazy(() => import('../pages/Dashboard/DashboardPage'));
+const UsersPage = lazy(() => import('../pages/Users/UsersPage'));
+const MaterialLibraryPage = lazy(() => import('../pages/MaterialLibrary/MaterialLibraryPage'));
+const ISCodesPage = lazy(() => import('../pages/ISCodes/ISCodesPage'));
+const LearningCenterPage = lazy(() => import('../pages/LearningCenter/LearningCenterPage'));
+const CategoriesPage = lazy(() => import('../pages/Categories/CategoriesPage'));
+const NotificationsPage = lazy(() => import('../pages/Notifications/NotificationsPage'));
+const ReportsPage = lazy(() => import('../pages/Reports/ReportsPage'));
+const AnalyticsPage = lazy(() => import('../pages/Analytics/AnalyticsPage'));
+const SettingsPage = lazy(() => import('../pages/Settings/SettingsPage'));
+const ProfilePage = lazy(() => import('../pages/Profile/ProfilePage'));
+const DownloadsPage = lazy(() => import('../pages/Downloads/DownloadsPage'));
+const ActivityLogsPage = lazy(() => import('../pages/ActivityLogs/ActivityLogsPage'));
 
 export default function AppRoutes() {
   return (
+    <Suspense
+      fallback={
+        <div className="h-screen flex items-center justify-center bg-[#F8FAFC]">
+          <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+        </div>
+      }
+    >
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       
@@ -40,5 +53,6 @@ export default function AppRoutes() {
       
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
+    </Suspense>
   );
 }

@@ -10,6 +10,29 @@ const router = Router();
 // All admin routes require authentication + admin role
 router.use(authenticate, adminOnly);
 
+// SECURITY FIX (pre-publish): every user-management route below used to let
+// any ADMIN grant, revoke, suspend, or delete ANY role — including
+// SUPER_ADMIN — with no restriction. In practice that meant a regular
+// ADMIN could edit their own account (or anyone's) and set
+// `role: "SUPER_ADMIN"`, or suspend/delete the actual super admins. Staff
+// privilege management should follow least-privilege: only a SUPER_ADMIN
+// may grant or touch ADMIN/SUPER_ADMIN-level accounts.
+const PRIVILEGED_ROLES = new Set(['ADMIN', 'SUPER_ADMIN']);
+
+function isPrivilegedRole(role: unknown): boolean {
+  return typeof role === 'string' && PRIVILEGED_ROLES.has(role);
+}
+
+// Minor hardening: `sortBy` was being interpolated straight into Prisma's
+// `orderBy: { [sortBy]: sortOrder }` from a raw query param. Prisma itself
+// prevents SQL injection here, but an arbitrary/misspelled field name still
+// throws an uncaught validation error (a 500) instead of just sorting
+// sensibly, and it needlessly exposes internal field names via error
+// messages. Whitelist to known-sortable columns per list endpoint.
+function safeSortField(requested: string, allowed: readonly string[], fallback: string): string {
+  return (allowed as string[]).includes(requested) ? requested : fallback;
+}
+
 // ========================
 // ADMIN AUTH / PROFILE
 // ========================
@@ -201,17 +224,15 @@ router.get('/users', async (req: AuthenticatedRequest, res: Response, next: Next
     const search = String(req.query.search || '');
     const role = String(req.query.role || '');
     const status = String(req.query.status || '');
-    const sortBy = String(req.query.sortBy || 'createdAt');
+    const sortBy = safeSortField(String(req.query.sortBy || 'createdAt'), ['createdAt', 'updatedAt', 'name', 'email', 'role'], 'createdAt');
     const sortOrder = String(req.query.sortOrder || 'desc') as 'asc' | 'desc';
     const skip = (page - 1) * limit;
 
     const where: any = {};
-    if (search) {
-      where.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { email: { contains: search, mode: 'insensitive' } },
-      ];
-    }
+    if (search) where.OR = [
+      { name: { contains: search, mode: 'insensitive' } },
+      { email: { contains: search, mode: 'insensitive' } },
+    ];
     if (role) where.role = role;
     if (status === 'active') where.isActive = true;
     if (status === 'inactive') where.isActive = false;
@@ -283,7 +304,11 @@ router.get('/users/:id', async (req: AuthenticatedRequest, res: Response, next: 
 router.post('/users', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const { name, email, password, role, phone, bio } = req.body;
-    
+
+    if (isPrivilegedRole(role) && req.user!.role !== 'SUPER_ADMIN') {
+      return res.status(403).json({ success: false, message: 'Only a Super Admin can create Admin or Super Admin accounts.' });
+    }
+
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) return res.status(400).json({ success: false, message: 'Email already registered' });
     
@@ -306,6 +331,17 @@ router.put('/users/:id', async (req: AuthenticatedRequest, res: Response, next: 
   try {
     const userId = String(req.params.id);
     const { name, email, role, phone, bio, avatar } = req.body;
+
+    const target = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+    if (!target) return res.status(404).json({ success: false, message: 'User not found' });
+
+    // Granting a privileged role, or editing an account that already has
+    // one, both require SUPER_ADMIN — otherwise a plain ADMIN could grant
+    // themselves (or a friend) ADMIN/SUPER_ADMIN via this endpoint, or
+    // silently edit another admin's account.
+    if ((isPrivilegedRole(role) || isPrivilegedRole(target.role)) && req.user!.role !== 'SUPER_ADMIN') {
+      return res.status(403).json({ success: false, message: 'Only a Super Admin can manage Admin or Super Admin accounts.' });
+    }
     
     // Check if email is taken
     if (email) {
@@ -334,6 +370,13 @@ router.delete('/users/:id', async (req: AuthenticatedRequest, res: Response, nex
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
+    if (isPrivilegedRole(user.role) && req.user!.role !== 'SUPER_ADMIN') {
+      return res.status(403).json({ success: false, message: 'Only a Super Admin can delete an Admin or Super Admin account.' });
+    }
+    if (userId === req.user!.id) {
+      return res.status(400).json({ success: false, message: "You can't delete your own account." });
+    }
+
     await prisma.user.delete({ where: { id: userId } });
 
     await prisma.adminActivityLog.create({
@@ -348,9 +391,21 @@ router.delete('/users/:id', async (req: AuthenticatedRequest, res: Response, nex
 router.put('/users/:id/suspend', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const userId = String(req.params.id);
+
+    const target = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+    if (!target) return res.status(404).json({ success: false, message: 'User not found' });
+    if (isPrivilegedRole(target.role) && req.user!.role !== 'SUPER_ADMIN') {
+      return res.status(403).json({ success: false, message: 'Only a Super Admin can suspend an Admin or Super Admin account.' });
+    }
+    if (userId === req.user!.id) {
+      return res.status(400).json({ success: false, message: "You can't suspend your own account." });
+    }
+
     const user = await prisma.user.update({
       where: { id: userId },
-      data: { isActive: false },
+      // Also drop the refresh token so a suspended user can't silently
+      // mint a new access token once their current one expires.
+      data: { isActive: false, refreshToken: null },
       select: { id: true, name: true, email: true, isActive: true },
     });
 
@@ -366,6 +421,13 @@ router.put('/users/:id/suspend', async (req: AuthenticatedRequest, res: Response
 router.put('/users/:id/activate', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const userId = String(req.params.id);
+
+    const target = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+    if (!target) return res.status(404).json({ success: false, message: 'User not found' });
+    if (isPrivilegedRole(target.role) && req.user!.role !== 'SUPER_ADMIN') {
+      return res.status(403).json({ success: false, message: 'Only a Super Admin can reactivate an Admin or Super Admin account.' });
+    }
+
     const user = await prisma.user.update({
       where: { id: userId },
       data: { isActive: true },
@@ -388,6 +450,13 @@ router.put('/users/:id/reset-password', async (req: AuthenticatedRequest, res: R
     if (!newPassword || newPassword.length < 6) {
       return res.status(400).json({ success: false, message: 'Password must be at least 6 characters' });
     }
+
+    const target = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+    if (!target) return res.status(404).json({ success: false, message: 'User not found' });
+    if (isPrivilegedRole(target.role) && req.user!.role !== 'SUPER_ADMIN') {
+      return res.status(403).json({ success: false, message: "Only a Super Admin can reset an Admin or Super Admin's password." });
+    }
+
     const hashedPassword = await bcrypt.hash(newPassword, 12);
     await prisma.user.update({
       where: { id: userId },
@@ -413,7 +482,7 @@ router.get('/materials', async (req: AuthenticatedRequest, res: Response, next: 
     const limit = parseInt(String(req.query.limit || '20'));
     const search = String(req.query.search || '');
     const category = String(req.query.category || '');
-    const sortBy = String(req.query.sortBy || 'createdAt');
+    const sortBy = safeSortField(String(req.query.sortBy || 'createdAt'), ['createdAt', 'updatedAt', 'name', 'category'], 'createdAt');
     const sortOrder = String(req.query.sortOrder || 'desc') as 'asc' | 'desc';
     const skip = (page - 1) * limit;
 
@@ -560,17 +629,15 @@ router.get('/iscodes', async (req: AuthenticatedRequest, res: Response, next: Ne
     const search = String(req.query.search || '');
     const category = String(req.query.category || '');
     const status = String(req.query.status || '');
-    const sortBy = String(req.query.sortBy || 'createdAt');
+    const sortBy = safeSortField(String(req.query.sortBy || 'createdAt'), ['createdAt', 'code', 'title', 'category', 'year', 'status'], 'createdAt');
     const sortOrder = String(req.query.sortOrder || 'desc') as 'asc' | 'desc';
     const skip = (page - 1) * limit;
 
     const where: any = {};
-    if (search) {
-      where.OR = [
-        { code: { contains: search, mode: 'insensitive' } },
-        { title: { contains: search, mode: 'insensitive' } },
-      ];
-    }
+    if (search) where.OR = [
+      { code: { contains: search, mode: 'insensitive' } },
+      { title: { contains: search, mode: 'insensitive' } },
+    ];
     if (category) where.category = category;
     if (status) where.status = status;
 
@@ -920,8 +987,6 @@ router.delete('/notifications/:id', async (req: AuthenticatedRequest, res: Respo
 
 router.get('/analytics', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
-    console.log("Analytics Request:", req.query);
-
     // Validate and parse the "days" query parameter
     const days = Number(req.query.days) || 30;
     if (days <= 0 || !Number.isFinite(days)) {
@@ -935,7 +1000,6 @@ router.get('/analytics', async (req: AuthenticatedRequest, res: Response, next: 
     const startDate = new Date();
     startDate.setUTCHours(0, 0, 0, 0);
     startDate.setUTCDate(startDate.getUTCDate() - days);
-    console.log("Generated Date:", startDate);
 
     // Run all independent queries in parallel using Promise.all.
     // Each query is wrapped in try/catch so a single failure doesn't crash the endpoint.
@@ -1137,9 +1201,8 @@ router.get('/analytics', async (req: AuthenticatedRequest, res: Response, next: 
  */
 async function getDailyUsageFixed(days: number, rangeStartDate: Date): Promise<{ date: string; users: number; downloads: number; visitors: number }[]> {
   const data: { date: string; users: number; downloads: number; visitors: number }[] = [];
-  const today = new Date();
 
-  for (let i = days - 1; i >= 0; i--) {
+  for (let i = 0; i < days; i++) {
     // Create fresh Date objects for each day - avoids mutation bugs
     const dayStart = new Date(rangeStartDate);
     dayStart.setUTCDate(dayStart.getUTCDate() + i);
@@ -1322,12 +1385,28 @@ router.get('/activity-logs', async (req: AuthenticatedRequest, res: Response, ne
 // SETTINGS
 // ========================
 
+// Fields the admin Settings UI never actually presents a form for (there's
+// no smtp/cloudinary/jwt-secret UI in admin/src/pages/Settings), and which
+// have no effect on the running app (the real config always comes from
+// server-side env vars — see src/config/index.ts). Returning them over the
+// API is pure secret exposure with no functional upside, so they're
+// stripped from both what's read back and what can be written.
+const SETTINGS_SELECT = {
+  id: true, websiteName: true, logo: true, favicon: true, banner: true,
+  contactEmail: true, contactPhone: true, address: true,
+  maintenanceMode: true, maintenanceMessage: true, updatedById: true,
+};
+function stripSensitiveSettingsFields(body: any) {
+  const { smtpHost, smtpPort, smtpUser, smtpPass, smtpSecure, cloudinaryCloud, cloudinaryKey, cloudinarySecret, jwtSecret, jwtExpiresIn, ...safe } = body || {};
+  return safe;
+}
+
 // Get site settings
 router.get('/settings', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
-    let settings = await prisma.siteSettings.findFirst();
+    let settings = await prisma.siteSettings.findFirst({ select: SETTINGS_SELECT });
     if (!settings) {
-      settings = await prisma.siteSettings.create({ data: {} });
+      settings = await prisma.siteSettings.create({ data: {}, select: SETTINGS_SELECT });
     }
     res.json({ success: true, data: settings });
   } catch (error) { next(error); }
@@ -1336,13 +1415,15 @@ router.get('/settings', async (req: AuthenticatedRequest, res: Response, next: N
 // Update site settings
 router.put('/settings', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
+    const safeBody = stripSensitiveSettingsFields(req.body);
     let settings = await prisma.siteSettings.findFirst();
     if (!settings) {
-      settings = await prisma.siteSettings.create({ data: { ...req.body, updatedById: req.user!.id } });
+      settings = await prisma.siteSettings.create({ data: { ...safeBody, updatedById: req.user!.id }, select: SETTINGS_SELECT });
     } else {
       settings = await prisma.siteSettings.update({
         where: { id: settings.id },
-        data: { ...req.body, updatedById: req.user!.id },
+        data: { ...safeBody, updatedById: req.user!.id },
+        select: SETTINGS_SELECT,
       });
     }
 
